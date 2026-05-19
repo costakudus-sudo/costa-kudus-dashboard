@@ -1,5 +1,5 @@
 "use client";
-
+import ProtectedRoute from "@/components/ProtectedRoute";
 import { useEffect, useState } from "react";
 import {
   collection,
@@ -74,6 +74,7 @@ export default function ClientsPage() {
   };
 
   return (
+  <ProtectedRoute>
     <main className="min-h-screen bg-gray-100 p-8">
 
       <div className="max-w-5xl mx-auto">
@@ -163,5 +164,6 @@ export default function ClientsPage() {
       </div>
 
     </main>
+    </ProtectedRoute>
   );
 }
