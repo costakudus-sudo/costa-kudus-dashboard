@@ -71,7 +71,7 @@ export default function TasksPage() {
         client,
         deadline,
         status: "Pending",
-        trackingId,
+        trackingId: "TSK-" + Math.floor(1000 + Math.random() * 9000),
         createdAt: new Date(),
       });
 
