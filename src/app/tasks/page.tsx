@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-
+import jsPDF from "jspdf";
 interface Task {
   id: string;
   title: string;
@@ -107,6 +107,38 @@ const updateTaskStatus = async (
     console.error(error);
     alert("Error updating task status");
   }
+};
+const generateInvoice = (task: any) => {
+
+  const doc = new jsPDF();
+
+  doc.setFontSize(22);
+
+  doc.text("COSTA KUDUS TECH", 20, 20);
+
+  doc.setFontSize(16);
+
+  doc.text("Task Invoice", 20, 40);
+
+  doc.setFontSize(12);
+
+  doc.text(`Client: ${task.clientName}`, 20, 60);
+
+  doc.text(`Task: ${task.taskName}`, 20, 70);
+
+  doc.text(`Status: ${task.status}`, 20, 80);
+
+  doc.text(`Tracking ID: ${task.trackingId}`, 20, 90);
+
+  doc.text(`Amount: GH¢ ${task.amount || 0}`, 20, 100);
+
+  doc.text(
+    `Generated: ${new Date().toLocaleDateString()}`,
+    20,
+    120
+  );
+
+  doc.save(`${task.trackingId}-invoice.pdf`);
 };
   return (
     <main className="min-h-screen bg-gray-100 p-8">
@@ -205,7 +237,12 @@ const updateTaskStatus = async (
   <option>Completed</option>
   <option>Delivered</option>
 </select>
-
+<button
+  onClick={() => generateInvoice(task)}
+  className="bg-green-600 text-white px-4 py-2 rounded-xl mt-4"
+>
+  Download Invoice
+</button>
                   </div>
                 </div>
               ))
