@@ -3,16 +3,15 @@ export interface Client {
 
   fullName: string;
   phone: string;
-
-  email?: string;
-  address?: string;
+  email: string;
+  address: string;
 
   service: string;
   serviceDetails: string;
 
   amount: number;
-  discount?: number;
-  total?: number;
+  discount: number;
+  total: number;
 
   jobStatus:
     | "Pending"
@@ -26,9 +25,9 @@ export interface Client {
     | "Part Payment"
     | "Paid";
 
-  amountPaid?: number;
-  balance?: number;
+  amountPaid: number;
+  balance: number;
 
-  createdAt: Date;
-  updatedAt?: Date;
+  createdAt: string;
+  updatedAt: string;
 }

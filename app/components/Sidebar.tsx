@@ -26,9 +26,9 @@ const menu = [
     icon: Users,
   },
   {
-    title: "Tasks",
-    href: "/tasks",
-    icon: ClipboardList,
+  title: "Jobs",
+  href: "/jobs",
+  icon: ClipboardList,
   },
   {
     title: "Payments",

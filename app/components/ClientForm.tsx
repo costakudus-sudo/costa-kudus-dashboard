@@ -1,34 +1,107 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+
+import ClientFields from "./ClientFields";
+import ServiceSelect from "./ServiceSelect";
+import JobFields from "./JobFields";
+import PaymentFields from "./PaymentFields";
+
+export interface Client {
+  id: string | number;
+  name: string;
+  phone: string;
+  service: string;
+  serviceDetails: string;
+  amount: number;
+  jobStatus: string;
+  paymentStatus: string;
+}
 
 interface ClientFormProps {
   open: boolean;
   onClose: () => void;
+  onSave: (client: Client) => void;
+  editingClient?: Client | null;
 }
 
 export default function ClientForm({
   open,
   onClose,
+  onSave,
+  editingClient,
 }: ClientFormProps) {
+  const [clientName, setClientName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [service, setService] = useState("");
+  const [serviceDetails, setServiceDetails] = useState("");
+  const [amount, setAmount] = useState("");
+  const [jobStatus, setJobStatus] = useState("Pending");
+  const [paymentStatus, setPaymentStatus] = useState("Unpaid");
+
+  // Load client information when editing
+  useEffect(() => {
+    if (editingClient) {
+      setClientName(editingClient.name || "");
+      setPhone(editingClient.phone || "");
+      setService(editingClient.service || "");
+      setServiceDetails(editingClient.serviceDetails || "");
+      setAmount(
+        editingClient.amount !== undefined
+          ? String(editingClient.amount)
+          : ""
+      );
+      setJobStatus(editingClient.jobStatus || "Pending");
+      setPaymentStatus(editingClient.paymentStatus || "Unpaid");
+    } else {
+      setClientName("");
+      setPhone("");
+      setService("");
+      setServiceDetails("");
+      setAmount("");
+      setJobStatus("Pending");
+      setPaymentStatus("Unpaid");
+    }
+  }, [editingClient, open]);
+
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+  const saveClient = () => {
+    if (!clientName || !phone || !service || !amount) {
+      alert("Please fill all required fields.");
+      return;
+    }
 
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+    const client: Client = {
+      id: editingClient?.id ?? Date.now(),
+      name: clientName,
+      phone,
+      service,
+      serviceDetails,
+      amount: Number(amount),
+      jobStatus,
+      paymentStatus,
+    };
+
+    onSave(client);
+
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl">
 
         {/* Header */}
-
-        <div className="flex items-center justify-between border-b px-6 py-4">
-
+        <div className="flex items-center justify-between border-b p-6">
           <div>
-            <h2 className="text-2xl font-bold text-slate-800">
-              Add Client
+            <h2 className="text-2xl font-bold">
+              {editingClient ? "Edit Client" : "Add Client"}
             </h2>
 
             <p className="text-sm text-slate-500">
-              Costa Kudus Tech Business Management System
+              Costa Kudus Tech
             </p>
           </div>
 
@@ -36,214 +109,67 @@ export default function ClientForm({
             onClick={onClose}
             className="rounded-lg p-2 hover:bg-slate-100"
           >
-            <X size={20} />
+            <X />
+          </button>
+        </div>
+
+        {/* Form */}
+        <div className="grid gap-6 p-6 md:grid-cols-2">
+
+          <div className="space-y-5">
+            <ClientFields
+              clientName={clientName}
+              setClientName={setClientName}
+              phone={phone}
+              setPhone={setPhone}
+            />
+
+            <ServiceSelect
+              value={service}
+              onChange={setService}
+            />
+          </div>
+
+          <div className="space-y-5">
+
+            <JobFields
+              amount={amount}
+              setAmount={setAmount}
+              jobStatus={jobStatus}
+              setJobStatus={setJobStatus}
+              serviceDetails={serviceDetails}
+              setServiceDetails={setServiceDetails}
+            />
+
+            <PaymentFields
+              paymentStatus={paymentStatus}
+              setPaymentStatus={setPaymentStatus}
+            />
+
+          </div>
+
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 border-t p-6">
+
+          <button
+            onClick={onClose}
+            className="rounded-xl border px-5 py-3 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={saveClient}
+            className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
+          >
+            {editingClient ? "Update Client" : "Save Client"}
           </button>
 
         </div>
 
-        {/* Form */}
-
-        <form className="grid grid-cols-1 gap-5 p-6 md:grid-cols-2">
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Full Name
-            </label>
-
-            <input
-              type="text"
-              placeholder="Enter client name"
-              className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Phone Number
-            </label>
-
-            <input
-              type="text"
-              placeholder="024xxxxxxx"
-              className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Email
-            </label>
-
-            <input
-              type="email"
-              placeholder="client@email.com"
-              className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Service
-            </label>
-
-<select>
-
-  <optgroup label="🖨 Printing Services">
-    <option>Printing</option>
-    <option>Bulk Printing</option>
-    <option>Photocopying</option>
-    <option>Scanning</option>
-    <option>Lamination</option>
-    <option>Book Binding</option>
-    <option>Spiral Binding</option>
-    <option>Hard Cover Binding</option>
-  </optgroup>
-
-  <optgroup label="📸 Photo Services">
-    <option>Passport Photo</option>
-    <option>Photo Frame</option>
-    <option>Photo Editing</option>
-    <option>Photo Restoration</option>
-  </optgroup>
-
-  <optgroup label="🎨 Graphic Design">
-    <option>Graphic Design</option>
-    <option>Logo Design</option>
-    <option>Business Card Design</option>
-    <option>Flyer Design</option>
-    <option>Poster Design</option>
-    <option>Banner Design</option>
-    <option>Invitation Card Design</option>
-    <option>ID Card Design</option>
-    <option>Certificate Design</option>
-    <option>Social Media Design</option>
-  </optgroup>
-
-  <optgroup label="🎓 Academic Services">
-    <option>Project Work</option>
-    <option>Research Work</option>
-    <option>Proposal Writing</option>
-    <option>Thesis/Dissertation</option>
-    <option>Assignment Typing</option>
-    <option>CV Writing</option>
-    <option>Cover Letter Writing</option>
-  </optgroup>
-
-  <optgroup label="💻 ICT Services">
-    <option>Website Design</option>
-    <option>Website Maintenance</option>
-    <option>Mobile App Development</option>
-    <option>Laptop Repair</option>
-    <option>Desktop Repair</option>
-    <option>Software Installation</option>
-    <option>Phone Setup</option>
-    <option>Laptop Setup</option>
-  </optgroup>
-
-  <optgroup label="🌐 Online Services">
-    <option>Online Registration</option>
-    <option>School Admission</option>
-    <option>University Application</option>
-    <option>Scholarship Application</option>
-    <option>Job Application</option>
-    <option>Passport Application</option>
-    <option>Passport Renewal</option>
-    <option>Visa Application</option>
-    <option>Ghana Card Registration</option>
-    <option>SSNIT Services</option>
-    <option>NHIS Registration</option>
-    <option>TIN Registration</option>
-  </optgroup>
-
-  <optgroup label="📄 Examination Services">
-    <option>WAEC Registration</option>
-    <option>BECE Results Checker</option>
-    <option>WASSCE Results Checker</option>
-    <option>NABPTEX Services</option>
-  </optgroup>
-
-  <optgroup label="📊 Office Services">
-    <option>Typing & Document Formatting</option>
-    <option>Document Conversion (PDF/Word)</option>
-    <option>Data Entry</option>
-    <option>Data Analysis</option>
-    <option>Email Setup</option>
-    <option>Internet Browsing</option>
-  </optgroup>
-
-  <optgroup label="🤖 Other Services">
-    <option>Business Consultancy</option>
-    <option>ICT Training</option>
-    <option>AI Services</option>
-    <option>Other</option>
-  </optgroup>
-
-</select>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Status
-            </label>
-
-            <select className="w-full rounded-xl border p-3 outline-none focus:border-blue-500">
-
-              <option>Active</option>
-              <option>Pending</option>
-              <option>Completed</option>
-
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Amount (GH₵)
-            </label>
-
-            <input
-              type="number"
-              placeholder="0.00"
-              className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-
-            <label className="mb-2 block text-sm font-medium">
-              Address
-            </label>
-
-            <textarea
-              rows={4}
-              placeholder="Client address..."
-              className="w-full rounded-xl border p-3 outline-none focus:border-blue-500"
-            />
-
-          </div>
-
-          <div className="md:col-span-2 flex justify-end gap-3 pt-4">
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border px-6 py-3"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
-            >
-              Save Client
-            </button>
-
-          </div>
-
-        </form>
-
       </div>
-
     </div>
   );
 }
