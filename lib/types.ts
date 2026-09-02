@@ -7,6 +7,9 @@ export interface Client {
   email?: string;
   address?: string;
 
+  portalToken?: string;
+  portalEnabled?: boolean;
+
   service: string;
   serviceDetails: string;
 

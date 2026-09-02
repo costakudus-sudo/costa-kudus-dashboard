@@ -38,8 +38,25 @@ interface Job {
   service: string;
   serviceDetails: string;
   amount: number;
-  jobStatus: "Pending" | "In Progress" | "Completed" | "Cancelled";
-  paymentStatus: "Unpaid" | "Part Payment" | "Paid";
+  discount?: number;
+  total?: number;
+  amountPaid?: number;
+  balance?: number;
+
+  jobStatus:
+    | "Pending"
+    | "In Progress"
+    | "Completed"
+    | "Delivered"
+    | "Cancelled";
+
+  paymentStatus:
+    | "Unpaid"
+    | "Part Payment"
+    | "Paid";
+
+  startDate?: string;
+  endDate?: string;
   scheduledDate?: string;
   createdAt?: Date;
 }
@@ -51,8 +68,14 @@ const emptyForm = {
   service: "",
   serviceDetails: "",
   amount: "",
+  discount: "",
+  total: "",
+  amountPaid: "",
+  balance: "",
   jobStatus: "Pending",
   paymentStatus: "Unpaid",
+  startDate: "",
+  endDate: "",
   scheduledDate: "",
 };
 
@@ -153,17 +176,23 @@ export default function JobsPage() {
   const openEditForm = (job: Job) => {
     setEditingJob(job);
 
-    setForm({
-      clientId: job.clientId || "",
-      clientName: job.clientName || "",
-      phone: job.phone || "",
-      service: job.service || "",
-      serviceDetails: job.serviceDetails || "",
-      amount: String(job.amount || ""),
-      jobStatus: job.jobStatus || "Pending",
-      paymentStatus: job.paymentStatus || "Unpaid",
-      scheduledDate: job.scheduledDate || "",
-    });
+setForm({
+  clientId: job.clientId || "",
+  clientName: job.clientName || "",
+  phone: job.phone || "",
+  service: job.service || "",
+  serviceDetails: job.serviceDetails || "",
+  amount: job.amount?.toString() || "",
+  discount: job.discount?.toString() || "",
+  total: job.total?.toString() || "",
+  amountPaid: job.amountPaid?.toString() || "",
+  balance: job.balance?.toString() || "",
+  jobStatus: job.jobStatus || "Pending",
+  paymentStatus: job.paymentStatus || "Unpaid",
+  startDate: job.startDate || "",
+  endDate: job.endDate || "",
+  scheduledDate: job.scheduledDate || "",
+});
 
     setOpenForm(true);
   };

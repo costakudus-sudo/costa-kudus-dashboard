@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import ClientForm from "../components/ClientForm";
+import { generatePortalToken } from "../../lib/portal";
+import { Client } from "../../lib/types";
 
 import {
   getClients,
@@ -21,6 +23,7 @@ import {
   Briefcase,
   Phone,
   X,
+  Link,
 } from "lucide-react";
 
 export default function ClientsPage() {
@@ -30,7 +33,7 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<any>(null);
   const [viewingClient, setViewingClient] = useState<any>(null);
 
-  const [clients, setClients] = useState<any[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
 
   /*
    * LOAD CLIENTS FROM FIREBASE
@@ -44,7 +47,7 @@ export default function ClientsPage() {
         // consistently uses "name".
         const normalizedClients = data.map((client: any) => ({
           ...client,
-          name: client.name || client.fullName || "",
+          name: client.fullName || client.fullName || "",
         }));
 
         setClients(normalizedClients);
@@ -64,7 +67,7 @@ export default function ClientsPage() {
       if (editingClient) {
         // UPDATE EXISTING CLIENT
         await updateClient(String(client.id), {
-        fullName: client.name,
+        fullName: client.fullName,
         phone: client.phone,
         service: client.service,
         serviceDetails: client.serviceDetails,
@@ -77,7 +80,7 @@ export default function ClientsPage() {
       } else {
         // ADD NEW CLIENT
         await addClient({
-          fullName: client.name,
+          fullName: client.fullName,
           phone: client.phone,
           service: client.service,
           serviceDetails: client.serviceDetails,
@@ -109,6 +112,48 @@ export default function ClientsPage() {
   };
 
   /*
+ * GENERATE CUSTOMER PORTAL LINK
+ */
+const handleGeneratePortalLink = async (client: Client) => {
+  try {
+    const token =
+      client.portalToken || generatePortalToken();
+
+    await updateClient(String(client.id), {
+      portalToken: token,
+      portalEnabled: true,
+    });
+
+    const portalLink = `${window.location.origin}/customer/${token}`;
+
+    await navigator.clipboard.writeText(portalLink);
+
+    alert(
+      `Customer portal link created and copied!\n\n${portalLink}`
+    );
+
+    // Refresh clients
+    const updatedClients = await getClients();
+
+    const normalizedClients = updatedClients.map(
+      (item: any) => ({
+        ...item,
+        name: item.name || item.fullName || "",
+      })
+    );
+
+    setClients(normalizedClients);
+  } catch (error) {
+    console.error(
+      "Error generating portal link:",
+      error
+    );
+
+    alert("Failed to generate customer portal link.");
+  }
+};
+
+  /*
    * DELETE CLIENT
    */
   const handleDeleteClient = async (id: string) => {
@@ -137,7 +182,7 @@ export default function ClientsPage() {
    * SEARCH
    */
   const filtered = clients.filter((client) => {
-    const name = client.name || client.fullName || "";
+    const name = client.fullName || "";
     const phone = client.phone || "";
     const service = client.service || "";
 
@@ -340,14 +385,10 @@ export default function ClientsPage() {
                 filtered.map((client) => {
 
                   const clientName =
-                    client.name ||
                     client.fullName ||
                     "Unnamed Client";
 
-                  const status =
-                    client.jobStatus ||
-                    client.status ||
-                    "Pending";
+                  const status = client.jobStatus || "Pending";
 
                   return (
                     <tr
@@ -387,6 +428,16 @@ export default function ClientsPage() {
                       <td>
 
                         <div className="flex justify-center gap-3">
+                       {/* CUSTOMER PORTAL */}
+                        <button
+                          onClick={() =>
+                            handleGeneratePortalLink(client)
+                          }
+                          className="text-purple-600 hover:text-purple-800"
+                          title="Generate Customer Portal Link"
+                        >
+                          <Link size={18} />
+                        </button>
 
                           {/* VIEW */}
                           <button
@@ -493,7 +544,7 @@ export default function ClientsPage() {
                 </p>
 
                 <p className="font-semibold text-slate-800">
-                  {viewingClient.name ||
+                  {viewingClient.fullName ||
                     viewingClient.fullName ||
                     "-"}
                 </p>
@@ -537,14 +588,10 @@ export default function ClientsPage() {
 
                 <span
                   className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${badgeColor(
-                    viewingClient.jobStatus ||
-                      viewingClient.status ||
-                      "Pending"
+                    viewingClient.jobStatus || "Pending"
                   )}`}
                 >
-                  {viewingClient.jobStatus ||
-                    viewingClient.status ||
-                    "Pending"}
+                  viewingClient.jobStatus || "Pending"
                 </span>
               </div>
 

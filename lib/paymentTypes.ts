@@ -6,6 +6,8 @@ export interface Payment {
   phone: string;
   service: string;
   jobAmount: number;
+  discount?: number;
+  total?: number;
   amountPaid: number;
   balance: number;
   paymentStatus: "Unpaid" | "Part Payment" | "Paid";

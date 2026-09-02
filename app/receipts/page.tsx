@@ -36,6 +36,7 @@ export default function ReceiptsPage() {
   const [phone, setPhone] = useState("");
   const [service, setService] = useState("");
   const [jobAmount, setJobAmount] = useState("");
+  const [discount, setDiscount] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentMethod, setPaymentMethod] =
     useState<Payment["paymentMethod"]>("Cash");
@@ -105,10 +106,18 @@ export default function ReceiptsPage() {
       return;
     }
 
-    const total = Number(jobAmount);
-    const paid = Number(amountPaid);
+  const subtotal = Number(jobAmount) || 0;
+  const discountAmount = Number(discount) || 0;
+  const total = Math.max(0, subtotal - discountAmount);
+  const paid = Number(amountPaid) || 0;
 
-    if (total <= 0 || paid <= 0 || paid > total) {
+    if (
+      subtotal <= 0 ||
+      discountAmount < 0 ||
+      discountAmount > subtotal ||
+      paid <= 0 ||
+      paid > total
+    ) {
       alert("Please enter valid payment amounts.");
       return;
     }
@@ -124,7 +133,9 @@ export default function ReceiptsPage() {
         clientName,
         phone,
         service,
-        jobAmount: total,
+        jobAmount: subtotal,
+        discount: discountAmount,
+        total,
         amountPaid: paid,
         balance,
         paymentStatus: status,
@@ -403,6 +414,21 @@ export default function ReceiptsPage() {
                     className="w-full rounded-xl border p-3 outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
 
+                  <div>
+                  <label className="mb-2 block text-sm font-medium">
+                    Discount (GH₵)
+                  </label>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={discount}
+                    onChange={(e) => setDiscount(e.target.value)}
+                    className="w-full rounded-xl border p-3 outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium">Amount Paid (GH₵)</label>
                   <input type="number" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)}
@@ -527,13 +553,48 @@ export default function ReceiptsPage() {
                 </div>
 
                 <div className="flex justify-end px-8 py-6">
-                  <div className="w-full md:w-80">
-                    <div className="flex justify-between border-t-2 border-slate-800 pt-4">
-                      <span className="text-xl font-bold">Amount Paid</span>
-                      <span className="text-2xl font-bold text-blue-600">
-                        GH₵ {Number(viewingReceipt.amountPaid).toFixed(2)}
+                  <div className="w-full md:w-96 space-y-3">
+
+                    <div className="flex justify-between text-slate-600">
+                      <span>Subtotal</span>
+                      <span>
+                        GH₵ {Number(viewingReceipt.jobAmount ?? 0).toFixed(2)}
                       </span>
                     </div>
+
+                    <div className="flex justify-between text-red-600">
+                      <span>Discount</span>
+                      <span>
+                        - GH₵ {Number(viewingReceipt.discount ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between border-t-2 border-slate-800 pt-4">
+                      <span className="text-xl font-bold">Total</span>
+                      <span className="text-2xl font-bold text-blue-600">
+                        GH₵{" "}
+                        {Number(
+                          viewingReceipt.total ??
+                            Number(viewingReceipt.jobAmount ?? 0) -
+                              Number(viewingReceipt.discount ?? 0)
+                        ).toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between text-green-600">
+                      <span>Amount Paid</span>
+                      <span>
+                        GH₵ {Number(viewingReceipt.amountPaid ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between border-t pt-3 font-bold text-red-600">
+                      <span>Balance</span>
+                      <span>
+                        GH₵ {Number(viewingReceipt.balance ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+
                   </div>
                 </div>
 

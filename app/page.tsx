@@ -16,8 +16,6 @@ import {
   BarChart3,
 } from "lucide-react";
 
-import Sidebar from "./components/Sidebar";
-import Header from "./components/Header";
 
 import { getClients } from "../lib/clientService";
 import { getJobs } from "../lib/jobService";
@@ -265,13 +263,13 @@ export default function Home() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen bg-slate-100">
+<div className="flex-1">
 
-        <Sidebar />
+  <section className="w-full">
 
-        <section className="flex-1 p-8">
-
-          <Header />
+    {/* =========================
+        WELCOME
+    ========================= */}
 
           <div className="flex min-h-[60vh] items-center justify-center">
 
@@ -283,22 +281,18 @@ export default function Home() {
 
         </section>
 
-      </main>
+      </div>
     );
   }
 
-  return (
-    <main className="flex min-h-screen bg-slate-100">
+return (
+  <div className="flex-1">
 
-      <Sidebar />
+    <section className="w-full">
 
-      <section className="flex-1 overflow-y-auto p-8">
-
-        <Header />
-
-        {/* =========================
-            WELCOME
-        ========================= */}
+      {/* =========================
+          WELCOME
+      ========================= */}
 
         <div className="mb-8">
 
@@ -1095,11 +1089,10 @@ export default function Home() {
             </div>
 
           </div>
-
         </div>
 
       </section>
 
-    </main>
+    </div>
   );
 }
