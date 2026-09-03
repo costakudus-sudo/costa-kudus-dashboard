@@ -24,6 +24,7 @@ import {
   Phone,
   X,
   Link,
+  MessageCircle,
 } from "lucide-react";
 
 export default function ClientsPage() {
@@ -32,6 +33,9 @@ export default function ClientsPage() {
 
   const [editingClient, setEditingClient] = useState<any>(null);
   const [viewingClient, setViewingClient] = useState<any>(null);
+  const [whatsappClient, setWhatsappClient] = useState<any>(null);
+  const [whatsappMessage, setWhatsappMessage] = useState("");
+  const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
 
   const [clients, setClients] = useState<Client[]>([]);
 
@@ -63,53 +67,82 @@ export default function ClientsPage() {
    * ADD / UPDATE CLIENT
    */
   const handleSaveClient = async (client: any) => {
-    try {
-      if (editingClient) {
-        // UPDATE EXISTING CLIENT
-        await updateClient(String(client.id), {
-        fullName: client.fullName,
-        phone: client.phone,
-        service: client.service,
-        serviceDetails: client.serviceDetails,
-        amount: client.amount,
-        jobStatus: client.jobStatus,
-        paymentStatus: client.paymentStatus,
+  try {
+    // Make sure the name always comes from either field
+    const fullName = String(
+      client.fullName || client.name || ""
+    ).trim();
+
+    const phone = String(client.phone || "").trim();
+    const service = String(client.service || "").trim();
+    const serviceDetails = String(
+      client.serviceDetails || ""
+    ).trim();
+
+    // Prevent undefined/empty values from reaching Firebase
+    if (!fullName) {
+      alert("Please enter the client's full name.");
+      return;
+    }
+
+    if (!phone) {
+      alert("Please enter the client's phone number.");
+      return;
+    }
+
+    if (!service) {
+      alert("Please enter the service.");
+      return;
+    }
+
+    if (editingClient) {
+      // UPDATE EXISTING CLIENT
+      await updateClient(String(client.id), {
+        fullName,
+        phone,
+        service,
+        serviceDetails,
+        amount: client.amount ?? 0,
+        jobStatus: client.jobStatus || "Pending",
+        paymentStatus: client.paymentStatus || "Unpaid",
       });
 
-        alert("Client updated successfully.");
-      } else {
-        // ADD NEW CLIENT
-        await addClient({
-          fullName: client.fullName,
-          phone: client.phone,
-          service: client.service,
-          serviceDetails: client.serviceDetails,
-          amount: client.amount,
-          jobStatus: client.jobStatus,
-          paymentStatus: client.paymentStatus,
-        });
+      alert("Client updated successfully.");
+    } else {
+      // ADD NEW CLIENT
+      await addClient({
+        fullName,
+        phone,
+        service,
+        serviceDetails,
+        amount: client.amount ?? 0,
+        jobStatus: client.jobStatus || "Pending",
+        paymentStatus: client.paymentStatus || "Unpaid",
+      });
 
-        alert("Client added successfully.");
-      }
+      alert("Client added successfully.");
+    }
 
-      // Reload clients from Firebase
-      const updatedClients = await getClients();
+    // Reload clients from Firebase
+    const updatedClients = await getClients();
 
-      const normalizedClients = updatedClients.map((item: any) => ({
+    const normalizedClients = updatedClients.map(
+      (item: any) => ({
         ...item,
         name: item.name || item.fullName || "",
-      }));
+      })
+    );
 
-      setClients(normalizedClients);
+    setClients(normalizedClients);
 
-      // Close form
-      setOpenForm(false);
-      setEditingClient(null);
-    } catch (error) {
-      console.error("Error saving client:", error);
-      alert("Failed to save client.");
-    }
-  };
+    // Close form
+    setOpenForm(false);
+    setEditingClient(null);
+  } catch (error) {
+    console.error("Error saving client:", error);
+    alert("Failed to save client.");
+  }
+};
 
   /*
  * GENERATE CUSTOMER PORTAL LINK
@@ -152,6 +185,56 @@ const handleGeneratePortalLink = async (client: Client) => {
     alert("Failed to generate customer portal link.");
   }
 };
+
+
+  /*
+   * SEND WHATSAPP MESSAGE
+   */
+  const handleSendWhatsapp = async () => {
+    if (!whatsappClient) return;
+
+    const phone = String(whatsappClient.phone || "").replace(/\D/g, "");
+    const message = whatsappMessage.trim();
+
+    if (!phone) {
+      alert("This client does not have a phone number.");
+      return;
+    }
+
+    if (!message) {
+      alert("Please enter a message.");
+      return;
+    }
+
+    try {
+      setSendingWhatsapp(true);
+
+      const response = await fetch("/api/whatsapp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone, message }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error("WhatsApp send error:", data);
+        alert("Failed to send WhatsApp message.");
+        return;
+      }
+
+      alert("WhatsApp message sent successfully.");
+      setWhatsappClient(null);
+      setWhatsappMessage("");
+    } catch (error) {
+      console.error("WhatsApp error:", error);
+      alert("Failed to send WhatsApp message.");
+    } finally {
+      setSendingWhatsapp(false);
+    }
+  };
 
   /*
    * DELETE CLIENT
@@ -438,6 +521,21 @@ const handleGeneratePortalLink = async (client: Client) => {
                         >
                           <Link size={18} />
                         </button>
+                           {/* WHATSAPP */}
+                           <button
+                             onClick={() => {
+                               setWhatsappClient(client);
+                               setWhatsappMessage(
+                                 `Hello ${client.fullName || "there"}, this is Costa Kudus Tech.`
+                               );
+                             }}
+                             className="text-green-600 hover:text-green-800"
+                             title="Send WhatsApp Message"
+                           >
+                             <MessageCircle size={18} />
+                           </button>
+
+
 
                           {/* VIEW */}
                           <button
@@ -492,6 +590,74 @@ const handleGeneratePortalLink = async (client: Client) => {
         </div>
 
       </div>
+
+
+      {/* ================= WHATSAPP MODAL ================= */}
+      {whatsappClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b p-6">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800">
+                  Send WhatsApp Message
+                </h2>
+                <p className="text-sm text-slate-500">
+                  {whatsappClient.fullName || "Client"} • {whatsappClient.phone || "-"}
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setWhatsappClient(null);
+                  setWhatsappMessage("");
+                }}
+                className="rounded-lg p-2 hover:bg-slate-100"
+                disabled={sendingWhatsapp}
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-6">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Message
+                </label>
+                <textarea
+                  value={whatsappMessage}
+                  onChange={(e) => setWhatsappMessage(e.target.value)}
+                  rows={6}
+                  placeholder="Type your WhatsApp message..."
+                  className="w-full resize-none rounded-xl border border-gray-200 p-3 outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={sendingWhatsapp}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t p-6">
+              <button
+                onClick={() => {
+                  setWhatsappClient(null);
+                  setWhatsappMessage("");
+                }}
+                className="rounded-xl border border-gray-200 px-5 py-3 font-medium text-slate-700 hover:bg-slate-50"
+                disabled={sendingWhatsapp}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleSendWhatsapp}
+                className="flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={sendingWhatsapp}
+              >
+                <MessageCircle size={18} />
+                {sendingWhatsapp ? "Sending..." : "Send WhatsApp"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= CLIENT FORM ================= */}
 

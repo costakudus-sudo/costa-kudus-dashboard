@@ -250,7 +250,8 @@ export default function NewJobPage() {
 
       await addInvoice({
         invoiceNumber,
-        jobId,
+        jobId: jobId.id,
+        clientId,
         clientName: fullName.trim(),
         phone: phone.trim(),
         service: service.trim(),
@@ -272,7 +273,7 @@ export default function NewJobPage() {
       // --------------------------------------------------
 
       await addPayment({
-        jobId,
+        jobId: jobId.id,
         clientId,
         clientName: fullName.trim(),
         phone: phone.trim(),

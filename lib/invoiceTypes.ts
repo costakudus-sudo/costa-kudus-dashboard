@@ -1,15 +1,23 @@
+import { Timestamp } from "firebase/firestore";
+
 export interface Invoice {
   id: string;
 
   invoiceNumber: string;
 
-  jobId?: string;
+  jobId: string;
+
+  clientId: string;
 
   clientName: string;
 
   phone: string;
 
+  email?: string;
+
   service: string;
+
+  serviceDetails?: string;
 
   amount: number;
 
@@ -30,5 +38,5 @@ export interface Invoice {
     | "Part Payment"
     | "Paid";
 
-  createdAt: any;
+  createdAt: Timestamp;
 }

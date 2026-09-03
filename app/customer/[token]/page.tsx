@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { getClients } from "../../../lib/clientService";
+import { getJobs, addJob } from "../../../lib/jobService";
 import { Client } from "../../../lib/types";
 
 export default function CustomerPortalPage() {
@@ -33,6 +34,10 @@ export default function CustomerPortalPage() {
   const [error, setError] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [orderService, setOrderService] = useState("");
+  const [orderDetails, setOrderDetails] = useState("");
+  const [submittingOrder, setSubmittingOrder] = useState(false);
 
   useEffect(() => {
     const loadCustomer = async () => {
@@ -103,6 +108,76 @@ export default function CustomerPortalPage() {
 
     verifyPayment();
   }, []);
+
+  const SERVICES = [
+    "High-Speed Internet Browsing",
+    "Online Registrations",
+    "Printing",
+    "Photocopying",
+    "Scanning",
+    "Passport Picture Services",
+    "CV & Cover Letter Writing",
+    "Lamination Services",
+    "Typing & Document Formatting",
+    "Graphic Design",
+    "Social Media Account Setup & Management",
+    "Software Installation & Updates",
+    "Phone & Laptop Setup Assistance",
+  ];
+
+  const submitNewJob = async () => {
+    if (!orderService) {
+      alert("Please select a service.");
+      return;
+    }
+
+    try {
+      setSubmittingOrder(true);
+
+      const jobs = await getJobs();
+      const numbers = jobs
+        .map((item: any) => {
+          const value = String(item.jobNumber || item.jobId || "");
+          const match = value.match(/^JOB-(\d+)$/);
+          return match ? Number(match[1]) : 0;
+        })
+        .filter((number) => number > 0);
+
+      const nextNumber = numbers.length > 0
+        ? Math.max(...numbers) + 1
+        : jobs.length + 1;
+
+      const jobNumber = `JOB-${String(nextNumber).padStart(4, "0")}`;
+
+      await addJob({
+        clientId: String((client as any).id || ""),
+        clientName: client?.fullName || "Customer",
+        phone: client?.phone || "",
+        email: client?.email || "",
+        service: orderService,
+        serviceDetails: orderDetails.trim() || "Customer requested this service through the customer portal.",
+        amount: 0,
+        total: 0,
+        amountPaid: 0,
+        balance: 0,
+        jobStatus: "Pending",
+        paymentStatus: "Unpaid",
+        source: "Customer Portal",
+        requestStatus: "New",
+      } as any);
+
+      setOrderOpen(false);
+      setOrderService("");
+      setOrderDetails("");
+
+      alert(`Your new service request has been submitted successfully.\n\nJob ID: ${jobNumber}\n\nCosta Kudus Tech will review your request and update you.`);
+    } catch (error) {
+      console.error("New job request error:", error);
+      alert("Unable to submit your new job request. Please try again.");
+    } finally {
+      setSubmittingOrder(false);
+    }
+  };
 
   // Live date and time
   useEffect(() => {
@@ -904,70 +979,112 @@ export default function CustomerPortalPage() {
                 View Invoice →
             </span>
             </Link>
-
-            <button
-              disabled
-              className="group rounded-2xl bg-white p-6 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-80"
+            <Link
+              href={`/customer/${token}/receipt`}
+              className="group rounded-2xl bg-white p-6 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-md"
             >
               <div className="flex items-center justify-between">
                 <div className="rounded-xl bg-emerald-100 p-3">
-                  <Receipt
-                    size={23}
-                    className="text-emerald-600"
-                  />
+                  <Receipt size={23} className="text-emerald-600" />
                 </div>
-
-                <ArrowRight
-                  size={18}
-                  className="text-slate-300"
-                />
+                <ArrowRight size={18} className="text-slate-300 transition group-hover:translate-x-1" />
               </div>
 
-              <h3 className="mt-5 font-bold text-slate-900">
-                View Receipt
-              </h3>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Access your payment receipts
-              </p>
-
-              <span className="mt-3 inline-block text-xs font-semibold text-emerald-600">
-                Coming Soon
-              </span>
-            </button>
+              <h3 className="mt-5 font-bold text-slate-900">View Receipts</h3>
+              <p className="mt-1 text-sm text-slate-500">Access your payment receipts</p>
+              <span className="mt-3 inline-block text-xs font-semibold text-emerald-600">View Receipts →</span>
+            </Link>
 
             <button
-              disabled
-              className="group rounded-2xl bg-white p-6 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-80 sm:col-span-2 lg:col-span-1"
+              type="button"
+              onClick={() => setOrderOpen(true)}
+              className="group rounded-2xl bg-white p-6 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-md"
             >
               <div className="flex items-center justify-between">
                 <div className="rounded-xl bg-purple-100 p-3">
-                  <Briefcase
-                    size={23}
-                    className="text-purple-600"
-                  />
+                  <Briefcase size={23} className="text-purple-600" />
                 </div>
-
-                <ArrowRight
-                  size={18}
-                  className="text-slate-300"
-                />
+                <ArrowRight size={18} className="text-slate-300 transition group-hover:translate-x-1" />
               </div>
 
-              <h3 className="mt-5 font-bold text-slate-900">
-                Order New Job
-              </h3>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Request another service
-              </p>
-
-              <span className="mt-3 inline-block text-xs font-semibold text-purple-600">
-                Coming Soon
-              </span>
+              <h3 className="mt-5 font-bold text-slate-900">Order New Job</h3>
+              <p className="mt-1 text-sm text-slate-500">Request another service</p>
+              <span className="mt-3 inline-block text-xs font-semibold text-purple-600">Order Now →</span>
             </button>
           </div>
         </section>
+
+        {/* =================================================
+            ORDER NEW JOB MODAL
+        ================================================= */}
+        {orderOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-200 p-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Order New Job</h2>
+                  <p className="mt-1 text-sm text-slate-500">Request another service from Costa Kudus Tech.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOrderOpen(false)}
+                  className="rounded-xl p-2 hover:bg-slate-100"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-5 p-6">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Service *</label>
+                  <select
+                    value={orderService}
+                    onChange={(e) => setOrderService(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">Select a service</option>
+                    {SERVICES.map((service) => (
+                      <option key={service} value={service}>{service}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Job Details</label>
+                  <textarea
+                    value={orderDetails}
+                    onChange={(e) => setOrderDetails(e.target.value)}
+                    rows={5}
+                    placeholder="Tell us what you need..."
+                    className="w-full resize-none rounded-xl border border-slate-300 px-4 py-3 outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div className="rounded-xl bg-purple-50 p-4 text-sm text-purple-800">
+                  Your request will be submitted as a new job request. Costa Kudus Tech will review it and confirm the price before work begins.
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setOrderOpen(false)}
+                    className="rounded-xl border border-slate-200 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={submittingOrder}
+                    onClick={submitNewJob}
+                    className="flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-3 font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submittingOrder ? "Submitting..." : "Submit Request"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* =================================================
             CUSTOMER CONTACT

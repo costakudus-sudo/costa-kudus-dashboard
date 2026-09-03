@@ -11,8 +11,7 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
 
-  // Login page and customer portal should remain
-  // without the admin Sidebar and Header.
+  // Customer portal and login must remain standalone.
   if (
     pathname === "/login" ||
     pathname.startsWith("/customer/")
@@ -22,14 +21,14 @@ export default function AppShell({
 
   return (
     <div className="flex min-h-screen bg-slate-100">
-      {/* Admin Sidebar */}
+      {/* Sidebar */}
       <Sidebar />
 
-      {/* Main Area */}
-      <div className="flex-1 min-w-0">
-        <main className="p-6 lg:p-8">
-          <Header />
+      {/* Main Content */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Header />
 
+        <main className="flex-1 p-6 lg:p-8">
           {children}
         </main>
       </div>

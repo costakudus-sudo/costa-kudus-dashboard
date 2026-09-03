@@ -10,8 +10,11 @@ import {
   Briefcase,
   Clock,
   CheckCircle,
-  XCircle,
   X,
+  Bell,
+  CalendarDays,
+  Check,
+  RotateCcw,
 } from "lucide-react";
 
 import {
@@ -32,9 +35,12 @@ interface Client {
 
 interface Job {
   id: string;
+  jobNumber?: string;
+  jobId?: string;
   clientId: string;
   clientName: string;
   phone: string;
+  email?: string;
   service: string;
   serviceDetails: string;
   amount: number;
@@ -55,10 +61,27 @@ interface Job {
     | "Part Payment"
     | "Paid";
 
+  paymentMethod?:
+    | "Cash"
+    | "Mobile Money"
+    | "Bank Transfer"
+    | "Card";
+
+  paymentDate?: Date | any;
+  scheduledDate?: string;
   startDate?: string;
   endDate?: string;
-  scheduledDate?: string;
-  createdAt?: Date;
+  notes?: string;
+  source?: string;
+
+  requestStatus?:
+    | "New"
+    | "Reviewed"
+    | "Accepted"
+    | "Rejected";
+
+  createdAt?: Date | any;
+  updatedAt?: Date | any;
 }
 
 const emptyForm = {
@@ -68,21 +91,30 @@ const emptyForm = {
   service: "",
   serviceDetails: "",
   amount: "",
-  discount: "",
-  total: "",
-  amountPaid: "",
-  balance: "",
   jobStatus: "Pending",
   paymentStatus: "Unpaid",
-  startDate: "",
-  endDate: "",
-  scheduledDate: "",
 };
+
+const SERVICES = [
+  "High-Speed Internet Browsing",
+  "Online Registrations",
+  "Printing",
+  "Photocopying",
+  "Scanning",
+  "Passport Picture Services",
+  "CV & Cover Letter Writing",
+  "Lamination Services",
+  "Typing & Document Formatting",
+  "Graphic Design",
+  "Social Media Account Setup & Management",
+  "Software Installation & Updates",
+  "Phone & Laptop Setup Assistance",
+];
+
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-
   const [search, setSearch] = useState("");
 
   const [openForm, setOpenForm] = useState(false);
@@ -90,10 +122,10 @@ export default function JobsPage() {
   const [viewingJob, setViewingJob] = useState<Job | null>(null);
 
   const [form, setForm] = useState(emptyForm);
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
+  const [updatingRequest, setUpdatingRequest] = useState<string | null>(null);
 
-  /*
-   * LOAD JOBS AND CLIENTS
-   */
   useEffect(() => {
     loadData();
   }, []);
@@ -105,7 +137,7 @@ export default function JobsPage() {
         getClients(),
       ]);
 
-      setJobs(jobsData);
+      setJobs(jobsData as Job[]);
 
       const normalizedClients = clientsData.map((client: any) => ({
         ...client,
@@ -118,9 +150,6 @@ export default function JobsPage() {
     }
   };
 
-  /*
-   * HANDLE INPUT
-   */
   const handleChange = (
     field: keyof typeof form,
     value: string
@@ -131,9 +160,6 @@ export default function JobsPage() {
     }));
   };
 
-  /*
-   * SELECT CLIENT
-   */
   const handleClientChange = (clientId: string) => {
     const selectedClient = clients.find(
       (client) => String(client.id) === clientId
@@ -146,7 +172,6 @@ export default function JobsPage() {
         clientName: "",
         phone: "",
       }));
-
       return;
     }
 
@@ -161,45 +186,33 @@ export default function JobsPage() {
     }));
   };
 
-  /*
-   * OPEN ADD FORM
-   */
   const openAddForm = () => {
     setEditingJob(null);
     setForm(emptyForm);
+    setServiceSearch("");
+    setServiceDropdownOpen(false);
     setOpenForm(true);
   };
 
-  /*
-   * OPEN EDIT FORM
-   */
   const openEditForm = (job: Job) => {
     setEditingJob(job);
 
-setForm({
-  clientId: job.clientId || "",
-  clientName: job.clientName || "",
-  phone: job.phone || "",
-  service: job.service || "",
-  serviceDetails: job.serviceDetails || "",
-  amount: job.amount?.toString() || "",
-  discount: job.discount?.toString() || "",
-  total: job.total?.toString() || "",
-  amountPaid: job.amountPaid?.toString() || "",
-  balance: job.balance?.toString() || "",
-  jobStatus: job.jobStatus || "Pending",
-  paymentStatus: job.paymentStatus || "Unpaid",
-  startDate: job.startDate || "",
-  endDate: job.endDate || "",
-  scheduledDate: job.scheduledDate || "",
-});
+    setForm({
+      clientId: job.clientId || "",
+      clientName: job.clientName || "",
+      phone: job.phone || "",
+      service: job.service || "",
+      serviceDetails: job.serviceDetails || "",
+      amount: String(job.amount || ""),
+      jobStatus: job.jobStatus || "Pending",
+      paymentStatus: job.paymentStatus || "Unpaid",
+    });
+    setServiceSearch(job.service || "");
+    setServiceDropdownOpen(false);
 
     setOpenForm(true);
   };
 
-  /*
-   * SAVE JOB
-   */
   const handleSaveJob = async () => {
     if (
       !form.clientId ||
@@ -211,44 +224,132 @@ setForm({
     }
 
     try {
-        const jobData = {
+      const jobData = {
         clientId: form.clientId,
         clientName: form.clientName,
         phone: form.phone,
         service: form.service,
         serviceDetails: form.serviceDetails,
         amount: Number(form.amount),
-        jobStatus: form.jobStatus as Job["jobStatus"],
+        jobStatus:
+          form.jobStatus as Job["jobStatus"],
         paymentStatus:
-            form.paymentStatus as Job["paymentStatus"],
-        scheduledDate: form.scheduledDate,
-        };
+          form.paymentStatus as Job["paymentStatus"],
+      };
 
       if (editingJob) {
         await updateJob(editingJob.id, jobData);
-
         alert("Job updated successfully.");
       } else {
-        await addJob(jobData);
+        // Create a short, customer-friendly Job ID.
+        const existingJobs = (await getJobs()) as Job[];
 
-        alert("Job added successfully.");
+        const numbers = existingJobs
+          .map((job: any) => {
+            const value = String(
+              job.jobNumber || job.jobId || ""
+            );
+            const match = value.match(/^JOB-(\d+)$/);
+            return match ? Number(match[1]) : 0;
+          })
+          .filter((number) => number > 0);
+
+        const nextNumber =
+          numbers.length > 0
+            ? Math.max(...numbers) + 1
+            : existingJobs.length + 1;
+
+        const jobNumber = `JOB-${String(nextNumber).padStart(4, "0")}`;
+
+        // Store the simple Job ID with the job.
+        await addJob({
+          ...jobData,
+          jobNumber,
+        });
+
+        // Build the customer tracking URL.
+        const baseUrl =
+          typeof window !== "undefined"
+            ? window.location.origin
+            : "";
+
+        const trackingLink =
+          `${baseUrl}/track/${encodeURIComponent(jobNumber)}`;
+
+        // Notify the client through the working WhatsApp API.
+        if (jobData.phone) {
+          try {
+            const normalizedPhone = jobData.phone
+              .replace(/\D/g, "")
+              .replace(/^0/, "233");
+
+            const whatsappResponse = await fetch(
+              "/api/whatsapp",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  phone: normalizedPhone,
+                  message:
+                    `Hello ${jobData.clientName || "Customer"}, this is Costa Kudus Tech.\n\n` +
+                    `Your job has been created successfully.\n\n` +
+                    `Job ID: ${jobNumber}\n` +
+                    `Service: ${jobData.service}\n` +
+                    `Amount: GH₵ ${jobData.amount.toFixed(2)}\n` +
+                    `Status: ${jobData.jobStatus}\n\n` +
+                    `Track your job:\n${trackingLink}\n\n` +
+                    `Please keep your Job ID for future reference. Thank you for choosing Costa Kudus Tech.`,
+                }),
+              }
+            );
+
+            const whatsappData =
+              await whatsappResponse.json();
+
+            if (!whatsappResponse.ok || !whatsappData.success) {
+              console.error(
+                "WhatsApp notification failed:",
+                whatsappData
+              );
+              alert(
+                `Job created successfully, but the WhatsApp notification could not be sent.\n\nJob ID: ${jobNumber}`
+              );
+            } else {
+              alert(
+                `Job created successfully and the client has been notified on WhatsApp.\n\nJob ID: ${jobNumber}`
+              );
+            }
+          } catch (whatsappError) {
+            console.error(
+              "WhatsApp notification error:",
+              whatsappError
+            );
+            alert(
+              `Job created successfully, but the WhatsApp notification could not be sent.\n\nJob ID: ${jobNumber}`
+            );
+          }
+        } else {
+          alert(
+            `Job created successfully.\n\nJob ID: ${jobNumber}\n\nNo phone number was available for the WhatsApp notification.`
+          );
+        }
       }
 
       setOpenForm(false);
       setEditingJob(null);
       setForm(emptyForm);
+      setServiceSearch("");
+      setServiceDropdownOpen(false);
 
       await loadData();
     } catch (error) {
       console.error("Error saving job:", error);
-
       alert("Failed to save job.");
     }
   };
 
-  /*
-   * DELETE JOB
-   */
   const handleDeleteJob = async (id: string) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this job?"
@@ -268,14 +369,75 @@ setForm({
       alert("Job deleted successfully.");
     } catch (error) {
       console.error("Error deleting job:", error);
-
       alert("Failed to delete job.");
     }
   };
 
   /*
-   * SEARCH
+   * CUSTOMER PORTAL REQUEST MANAGEMENT
    */
+  const updateRequestStatus = async (
+    job: Job,
+    requestStatus: NonNullable<Job["requestStatus"]>
+  ) => {
+    try {
+      setUpdatingRequest(job.id);
+
+      const updates: any = {
+        requestStatus,
+      };
+
+      if (requestStatus === "Accepted") {
+        updates.jobStatus = "Pending";
+      }
+
+      if (requestStatus === "Rejected") {
+        updates.jobStatus = "Cancelled";
+      }
+
+      if (requestStatus === "Reviewed") {
+        updates.jobStatus = "Pending";
+      }
+
+      await updateJob(job.id, updates);
+
+      setJobs((prev) =>
+        prev.map((item) =>
+          item.id === job.id
+            ? {
+                ...item,
+                ...updates,
+              }
+            : item
+        )
+      );
+
+      setViewingJob((current) =>
+        current?.id === job.id
+          ? {
+              ...current,
+              ...updates,
+            }
+          : current
+      );
+    } catch (error) {
+      console.error(
+        "Error updating request:",
+        error
+      );
+
+      alert(
+        "Failed to update the customer request."
+      );
+    } finally {
+      setUpdatingRequest(null);
+    }
+  };
+
+  const filteredServices = SERVICES.filter((service) =>
+    service.toLowerCase().includes(serviceSearch.toLowerCase())
+  );
+
   const filteredJobs = jobs.filter((job) => {
     const searchText = search.toLowerCase();
 
@@ -291,13 +453,19 @@ setForm({
         .includes(searchText) ||
       job.jobStatus
         ?.toLowerCase()
+        .includes(searchText) ||
+      job.source
+        ?.toLowerCase()
+        .includes(searchText) ||
+      String(job.jobNumber || job.jobId || job.id || "")
+        .toLowerCase()
+        .includes(searchText) ||
+      job.requestStatus
+        ?.toLowerCase()
         .includes(searchText)
     );
   });
 
-  /*
-   * STATUS COLORS
-   */
   const statusColor = (status: string) => {
     switch (status) {
       case "Pending":
@@ -309,6 +477,9 @@ setForm({
       case "Completed":
         return "bg-green-100 text-green-700";
 
+      case "Delivered":
+        return "bg-purple-100 text-purple-700";
+
       case "Cancelled":
         return "bg-red-100 text-red-700";
 
@@ -317,9 +488,6 @@ setForm({
     }
   };
 
-  /*
-   * PAYMENT COLORS
-   */
   const paymentColor = (status: string) => {
     switch (status) {
       case "Paid":
@@ -336,9 +504,25 @@ setForm({
     }
   };
 
-  /*
-   * STATISTICS
-   */
+  const requestColor = (status?: string) => {
+    switch (status) {
+      case "New":
+        return "bg-blue-100 text-blue-700";
+
+      case "Reviewed":
+        return "bg-yellow-100 text-yellow-700";
+
+      case "Accepted":
+        return "bg-green-100 text-green-700";
+
+      case "Rejected":
+        return "bg-red-100 text-red-700";
+
+      default:
+        return "bg-slate-100 text-slate-600";
+    }
+  };
+
   const totalJobs = jobs.length;
 
   const pendingJobs = jobs.filter(
@@ -353,12 +537,18 @@ setForm({
     (job) => job.jobStatus === "Completed"
   ).length;
 
+  const newRequests = jobs.filter(
+    (job) =>
+      job.source === "Customer Portal" &&
+      job.requestStatus === "New"
+  ).length;
+
   return (
     <div className="space-y-8">
 
       {/* HEADER */}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
         <div>
           <h1 className="text-3xl font-bold text-slate-800">
@@ -372,7 +562,7 @@ setForm({
 
         <button
           onClick={openAddForm}
-          className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-700"
+          className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-700"
         >
           <Plus size={18} />
           Add Job
@@ -426,6 +616,34 @@ setForm({
 
       </div>
 
+      {/* NEW REQUEST ALERT */}
+
+      {newRequests > 0 && (
+
+        <div className="flex items-center gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+            <Bell size={21} />
+          </div>
+
+          <div>
+            <p className="font-bold text-blue-900">
+              New Customer Requests
+            </p>
+
+            <p className="text-sm text-blue-700">
+              You have {newRequests} new{" "}
+              {newRequests === 1
+                ? "job request"
+                : "job requests"}{" "}
+              from the Customer Portal.
+            </p>
+          </div>
+
+        </div>
+
+      )}
+
       {/* SEARCH */}
 
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -451,7 +669,7 @@ setForm({
 
       </div>
 
-      {/* JOB TABLE */}
+      {/* TABLE */}
 
       <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
 
@@ -464,6 +682,10 @@ setForm({
               <tr className="text-left">
 
                 <th className="p-4">
+                  Job ID
+                </th>
+
+                <th>
                   Client
                 </th>
 
@@ -483,6 +705,14 @@ setForm({
                   Payment
                 </th>
 
+                <th>
+                  Request
+                </th>
+
+                <th>
+                  Source
+                </th>
+
                 <th className="text-center">
                   Actions
                 </th>
@@ -496,12 +726,14 @@ setForm({
               {filteredJobs.length === 0 ? (
 
                 <tr>
+
                   <td
-                    colSpan={6}
+                    colSpan={9}
                     className="p-10 text-center text-slate-500"
                   >
                     No jobs found.
                   </td>
+
                 </tr>
 
               ) : (
@@ -512,6 +744,16 @@ setForm({
                     key={job.id}
                     className="border-t transition hover:bg-slate-50"
                   >
+
+                    {/* JOB ID */}
+
+                    <td className="p-4">
+                      <p className="font-semibold text-blue-700">
+                        {job.jobNumber || job.jobId || job.id}
+                      </p>
+                    </td>
+
+                    {/* CLIENT */}
 
                     <td className="p-4">
 
@@ -525,13 +767,40 @@ setForm({
 
                     </td>
 
+                    {/* SERVICE */}
+
                     <td>
-                      {job.service}
+
+                      <p className="font-medium">
+                        {job.service}
+                      </p>
+
+                      {job.source ===
+                        "Customer Portal" &&
+                        job.requestStatus ===
+                          "New" && (
+
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                            <Bell size={11} />
+                            New Request
+                          </span>
+
+                        )}
+
                     </td>
 
+                    {/* AMOUNT */}
+
                     <td className="font-semibold">
-                      GH₵ {Number(job.amount).toFixed(2)}
+                      GH₵{" "}
+                      {Number(
+                        job.total ??
+                          job.amount ??
+                          0
+                      ).toFixed(2)}
                     </td>
+
+                    {/* JOB STATUS */}
 
                     <td>
 
@@ -545,6 +814,8 @@ setForm({
 
                     </td>
 
+                    {/* PAYMENT */}
+
                     <td>
 
                       <span
@@ -557,11 +828,58 @@ setForm({
 
                     </td>
 
+                    {/* REQUEST STATUS */}
+
+                    <td>
+
+                      {job.source ===
+                      "Customer Portal" ? (
+
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${requestColor(
+                            job.requestStatus
+                          )}`}
+                        >
+                          {job.requestStatus ||
+                            "New"}
+                        </span>
+
+                      ) : (
+
+                        <span className="text-sm text-slate-400">
+                          —
+                        </span>
+
+                      )}
+
+                    </td>
+
+                    {/* SOURCE */}
+
+                    <td>
+
+                      {job.source ===
+                      "Customer Portal" ? (
+
+                        <span className="inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
+                          Customer Portal
+                        </span>
+
+                      ) : (
+
+                        <span className="text-sm text-slate-500">
+                          Admin
+                        </span>
+
+                      )}
+
+                    </td>
+
+                    {/* ACTIONS */}
+
                     <td>
 
                       <div className="flex justify-center gap-3">
-
-                        {/* VIEW */}
 
                         <button
                           onClick={() =>
@@ -573,8 +891,6 @@ setForm({
                           <Eye size={18} />
                         </button>
 
-                        {/* EDIT */}
-
                         <button
                           onClick={() =>
                             openEditForm(job)
@@ -584,8 +900,6 @@ setForm({
                         >
                           <Pencil size={18} />
                         </button>
-
-                        {/* DELETE */}
 
                         <button
                           onClick={() =>
@@ -615,13 +929,13 @@ setForm({
 
       </div>
 
-      {/* ADD / EDIT JOB MODAL */}
+      {/* ADD / EDIT MODAL */}
 
       {openForm && (
 
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
 
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
 
             <div className="flex items-center justify-between border-b p-6">
 
@@ -643,6 +957,8 @@ setForm({
                 onClick={() => {
                   setOpenForm(false);
                   setEditingJob(null);
+                  setServiceSearch("");
+                  setServiceDropdownOpen(false);
                 }}
                 className="rounded-lg p-2 hover:bg-slate-100"
               >
@@ -652,8 +968,6 @@ setForm({
             </div>
 
             <div className="grid gap-5 p-6 md:grid-cols-2">
-
-              {/* CLIENT */}
 
               <div className="md:col-span-2">
 
@@ -692,8 +1006,6 @@ setForm({
 
               </div>
 
-              {/* PHONE */}
-
               <div>
 
                 <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -708,29 +1020,57 @@ setForm({
 
               </div>
 
-              {/* SERVICE */}
-
-              <div>
-
+              <div className="relative">
                 <label className="mb-2 block text-sm font-medium text-slate-700">
                   Service *
                 </label>
 
                 <input
-                  value={form.service}
-                  onChange={(e) =>
-                    handleChange(
-                      "service",
-                      e.target.value
-                    )
-                  }
-                  placeholder="e.g. Printing"
+                  value={serviceSearch || form.service}
+                  onFocus={() => {
+                    setServiceDropdownOpen(true);
+                    setServiceSearch(form.service);
+                  }}
+                  onChange={(e) => {
+                    setServiceSearch(e.target.value);
+                    setServiceDropdownOpen(true);
+                    handleChange("service", e.target.value);
+                  }}
+                  placeholder="Search or select a service..."
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+                  autoComplete="off"
                 />
 
+                {serviceDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+                    {filteredServices.length > 0 ? (
+                      filteredServices.map((service) => (
+                        <button
+                          key={service}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            handleChange("service", service);
+                            setServiceSearch(service);
+                            setServiceDropdownOpen(false);
+                          }}
+                          className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm transition hover:bg-blue-50 hover:text-blue-700 ${
+                            form.service === service
+                              ? "bg-blue-50 font-semibold text-blue-700"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          {service}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-3 text-sm text-slate-500">
+                        No matching service found.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-
-              {/* AMOUNT */}
 
               <div>
 
@@ -753,8 +1093,6 @@ setForm({
                 />
 
               </div>
-
-              {/* JOB STATUS */}
 
               <div>
 
@@ -785,6 +1123,10 @@ setForm({
                     Completed
                   </option>
 
+                  <option value="Delivered">
+                    Delivered
+                  </option>
+
                   <option value="Cancelled">
                     Cancelled
                   </option>
@@ -792,8 +1134,6 @@ setForm({
                 </select>
 
               </div>
-
-              {/* PAYMENT STATUS */}
 
               <div>
 
@@ -828,26 +1168,8 @@ setForm({
 
               </div>
 
-              {/* DETAILS */}
+              <div className="md:col-span-2">
 
-              <div className="md:col-span-2 space-y-5">
-                            <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-                Scheduled Date
-            </label>
-
-            <input
-                type="date"
-                value={form.scheduledDate}
-                onChange={(e) =>
-                setForm({
-                    ...form,
-                    scheduledDate: e.target.value,
-                })
-                }
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            </div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">
                   Job Details
                 </label>
@@ -869,14 +1191,14 @@ setForm({
 
             </div>
 
-            {/* FOOTER */}
-
             <div className="flex justify-end gap-3 border-t p-6">
 
               <button
                 onClick={() => {
                   setOpenForm(false);
                   setEditingJob(null);
+                  setServiceSearch("");
+                  setServiceDropdownOpen(false);
                 }}
                 className="rounded-xl border border-slate-300 px-5 py-3 font-medium hover:bg-slate-50"
               >
@@ -900,21 +1222,34 @@ setForm({
 
       )}
 
-      {/* VIEW JOB MODAL */}
+      {/* VIEW JOB / REQUEST MODAL */}
 
       {viewingJob && (
 
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
 
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
 
             <div className="flex items-center justify-between border-b p-6">
 
               <div>
 
-                <h2 className="text-2xl font-bold text-slate-800">
-                  Job Details
-                </h2>
+                <div className="flex items-center gap-2">
+
+                  <h2 className="text-2xl font-bold text-slate-800">
+                    Job Details
+                  </h2>
+
+                  {viewingJob.source ===
+                    "Customer Portal" && (
+
+                    <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
+                      Customer Portal
+                    </span>
+
+                  )}
+
+                </div>
 
                 <p className="text-sm text-slate-500">
                   Costa Kudus Tech
@@ -934,6 +1269,18 @@ setForm({
             </div>
 
             <div className="grid gap-5 p-6 md:grid-cols-2">
+
+              <div>
+                <p className="text-sm text-slate-500">
+                  Job ID
+                </p>
+
+                <p className="font-semibold text-blue-700">
+                  {viewingJob.jobNumber ||
+                    viewingJob.jobId ||
+                    viewingJob.id}
+                </p>
+              </div>
 
               <div>
                 <p className="text-sm text-slate-500">
@@ -973,12 +1320,15 @@ setForm({
                 <p className="font-semibold">
                   GH₵{" "}
                   {Number(
-                    viewingJob.amount
+                    viewingJob.total ??
+                      viewingJob.amount ??
+                      0
                   ).toFixed(2)}
                 </p>
               </div>
 
               <div>
+
                 <p className="text-sm text-slate-500">
                   Job Status
                 </p>
@@ -990,9 +1340,11 @@ setForm({
                 >
                   {viewingJob.jobStatus}
                 </span>
+
               </div>
 
               <div>
+
                 <p className="text-sm text-slate-500">
                   Payment Status
                 </p>
@@ -1004,7 +1356,68 @@ setForm({
                 >
                   {viewingJob.paymentStatus}
                 </span>
+
               </div>
+
+              {viewingJob.source ===
+                "Customer Portal" && (
+
+                <div>
+
+                  <p className="text-sm text-slate-500">
+                    Request Status
+                  </p>
+
+                  <span
+                    className={`inline-block rounded-full px-3 py-1 text-sm font-semibold ${requestColor(
+                      viewingJob.requestStatus
+                    )}`}
+                  >
+                    {viewingJob.requestStatus ||
+                      "New"}
+                  </span>
+
+                </div>
+
+              )}
+
+              <div>
+
+                <p className="text-sm text-slate-500">
+                  Request Source
+                </p>
+
+                <p className="font-semibold">
+                  {viewingJob.source ||
+                    "Admin"}
+                </p>
+
+              </div>
+
+              {viewingJob.scheduledDate && (
+
+                <div className="flex items-start gap-2">
+
+                  <CalendarDays
+                    size={18}
+                    className="mt-0.5 text-blue-600"
+                  />
+
+                  <div>
+
+                    <p className="text-sm text-slate-500">
+                      Preferred Date
+                    </p>
+
+                    <p className="font-semibold">
+                      {viewingJob.scheduledDate}
+                    </p>
+
+                  </div>
+
+                </div>
+
+              )}
 
               <div className="md:col-span-2">
 
@@ -1012,14 +1425,118 @@ setForm({
                   Job Details
                 </p>
 
-                <p className="font-semibold">
+                <p className="mt-1 font-semibold">
                   {viewingJob.serviceDetails ||
                     "No details provided."}
                 </p>
 
               </div>
 
+              {viewingJob.notes && (
+
+                <div className="md:col-span-2">
+
+                  <p className="text-sm text-slate-500">
+                    Additional Notes
+                  </p>
+
+                  <p className="mt-1 font-semibold">
+                    {viewingJob.notes}
+                  </p>
+
+                </div>
+
+              )}
+
             </div>
+
+            {/* REQUEST ACTIONS */}
+
+            {viewingJob.source ===
+              "Customer Portal" && (
+
+              <div className="border-t bg-slate-50 p-6">
+
+                <p className="mb-4 text-sm font-bold text-slate-700">
+                  Request Management
+                </p>
+
+                <div className="flex flex-wrap gap-3">
+
+                  {viewingJob.requestStatus ===
+                    "New" && (
+
+                    <button
+                      disabled={
+                        updatingRequest ===
+                        viewingJob.id
+                      }
+                      onClick={() =>
+                        updateRequestStatus(
+                          viewingJob,
+                          "Reviewed"
+                        )
+                      }
+                      className="flex items-center gap-2 rounded-xl bg-yellow-500 px-4 py-3 font-semibold text-white hover:bg-yellow-600 disabled:opacity-50"
+                    >
+                      <RotateCcw size={17} />
+                      Mark Reviewed
+                    </button>
+
+                  )}
+
+                  {viewingJob.requestStatus !==
+                    "Accepted" && (
+                    <button
+                      disabled={
+                        updatingRequest ===
+                        viewingJob.id
+                      }
+                      onClick={() =>
+                        updateRequestStatus(
+                          viewingJob,
+                          "Accepted"
+                        )
+                      }
+                      className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                    >
+                      <Check size={17} />
+                      Accept Request
+                    </button>
+                  )}
+
+                  {viewingJob.requestStatus !==
+                    "Rejected" && (
+                    <button
+                      disabled={
+                        updatingRequest ===
+                        viewingJob.id
+                      }
+                      onClick={() => {
+                        const confirmed =
+                          window.confirm(
+                            "Reject this customer request?"
+                          );
+
+                        if (confirmed) {
+                          updateRequestStatus(
+                            viewingJob,
+                            "Rejected"
+                          );
+                        }
+                      }}
+                      className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-3 font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      <X size={17} />
+                      Reject Request
+                    </button>
+                  )}
+
+                </div>
+
+              </div>
+
+            )}
 
             <div className="flex justify-end border-t p-6">
 
