@@ -1,20 +1,47 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
-const firebaseAdminApp =
-  getApps().length === 0
-    ? initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(
-            /\\n/g,
-            "\n"
-          ),
-        }),
-      })
-    : getApps()[0];
+function getFirebaseAdminApp() {
+  if (getApps().length > 0) {
+    return getApps()[0];
+  }
 
-export const adminDb = getFirestore(firebaseAdminApp);
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(
+    /\\n/g,
+    "\n"
+  );
 
-export default firebaseAdminApp;
+  if (!projectId) {
+    throw new Error("FIREBASE_ADMIN_PROJECT_ID is missing.");
+  }
+
+  if (!clientEmail) {
+    throw new Error("FIREBASE_ADMIN_CLIENT_EMAIL is missing.");
+  }
+
+  if (!privateKey) {
+    throw new Error("FIREBASE_ADMIN_PRIVATE_KEY is missing.");
+  }
+
+  return initializeApp({
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    }),
+  });
+}
+
+export function getAdminDb() {
+  return getFirestore(getFirebaseAdminApp());
+}
+
+/*
+ * Keep this export because the existing payment API routes
+ * already import adminDb.
+ */
+export const adminDb = getAdminDb();
+
+export default getFirebaseAdminApp;
