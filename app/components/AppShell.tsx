@@ -11,10 +11,12 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
 
-  // Customer portal and login must remain standalone.
+  // Login, customer portal, and public job tracking
+  // must remain standalone without the admin Sidebar and Header.
   if (
     pathname === "/login" ||
-    pathname.startsWith("/customer/")
+    pathname.startsWith("/customer/") ||
+    pathname.startsWith("/track/")
   ) {
     return <>{children}</>;
   }
