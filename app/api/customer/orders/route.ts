@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "../../../../lib/firebaseAdmin";
+import { getAdminDb } from "../../../../lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 
 export async function POST(request: Request) {
@@ -34,6 +34,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Firebase Admin is initialized only when the API is actually called.
+    const adminDb = getAdminDb();
 
     // Verify customer securely on the server
     const clientsSnapshot = await adminDb
