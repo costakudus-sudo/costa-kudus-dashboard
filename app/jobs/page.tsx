@@ -267,14 +267,42 @@ export default function JobsPage() {
           jobNumber,
         });
 
-        // Build the customer tracking URL.
-        const baseUrl =
-          typeof window !== "undefined"
-            ? window.location.origin
-            : "";
+       // Build the customer portal URL.
+      const baseUrl =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "";
 
-        const trackingLink =
-          `${baseUrl}/track/${encodeURIComponent(jobNumber)}`;
+      const clients = await getClients();
+
+      const normalizePhone = (phone?: string) =>
+        phone
+          ?.replace(/\D/g, "")
+          .replace(/^0/, "233");
+
+      const client = clients.find(
+        (c: Client) =>
+          normalizePhone(c.phone) === normalizePhone(jobData.phone)
+      );
+
+      let portalToken = client?.portalToken;
+
+      if (client) {
+        // Reuse the customer's existing portal token.
+        // If they do not have one, create and save a new token.
+        if (!portalToken) {
+          portalToken = generatePortalToken();
+
+          await updateClient(String(client.id), {
+            portalToken,
+            portalEnabled: true,
+          });
+        }
+      }
+
+      const customerPortalLink = portalToken
+        ? `${baseUrl}/customer/${encodeURIComponent(portalToken)}`
+        : "";
 
         // Notify the client through the working WhatsApp API.
         if (jobData.phone) {
@@ -299,11 +327,11 @@ export default function JobsPage() {
                     `Service: ${jobData.service}\n` +
                     `Amount: GH₵ ${jobData.amount.toFixed(2)}\n` +
                     `Status: ${jobData.jobStatus}\n\n` +
-                    `Track your job:\n${trackingLink}\n\n` +
+                    `Access your customer portal:\n${customerPortalLink}\n\n` +
                     `Please keep your Job ID for future reference. Thank you for choosing Costa Kudus Tech.`,
                 }),
               }
-            );
+            );const portalToken
 
             const whatsappData =
               await whatsappResponse.json();
