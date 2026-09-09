@@ -24,8 +24,11 @@ import {
   deleteJob,
 } from "../../lib/jobService";
 
-import { getClients, updateClient } from "../../lib/clientService";
-import { generatePortalToken } from "../../lib/portal";
+import {
+  getClients,
+  updateClient,
+  generatePortalToken,
+} from "../../lib/clientService";
 
 interface Client {
   id: string;
@@ -39,6 +42,7 @@ interface Client {
 interface Job {
   id: string;
   jobNumber?: string;
+  jobId?: string;
   clientId: string;
   clientName: string;
   phone: string;
@@ -97,6 +101,23 @@ const emptyForm = {
   paymentStatus: "Unpaid",
 };
 
+const SERVICES = [
+  "High-Speed Internet Browsing",
+  "Online Registrations",
+  "Printing",
+  "Photocopying",
+  "Scanning",
+  "Passport Picture Services",
+  "CV & Cover Letter Writing",
+  "Lamination Services",
+  "Typing & Document Formatting",
+  "Graphic Design",
+  "Social Media Account Setup & Management",
+  "Software Installation & Updates",
+  "Phone & Laptop Setup Assistance",
+];
+
+
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -107,6 +128,8 @@ export default function JobsPage() {
   const [viewingJob, setViewingJob] = useState<Job | null>(null);
 
   const [form, setForm] = useState(emptyForm);
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
   const [updatingRequest, setUpdatingRequest] = useState<string | null>(null);
 
   useEffect(() => {
@@ -172,6 +195,8 @@ export default function JobsPage() {
   const openAddForm = () => {
     setEditingJob(null);
     setForm(emptyForm);
+    setServiceSearch("");
+    setServiceDropdownOpen(false);
     setOpenForm(true);
   };
 
@@ -188,6 +213,8 @@ export default function JobsPage() {
       jobStatus: job.jobStatus || "Pending",
       paymentStatus: job.paymentStatus || "Unpaid",
     });
+    setServiceSearch(job.service || "");
+    setServiceDropdownOpen(false);
 
     setOpenForm(true);
   };
@@ -217,15 +244,90 @@ export default function JobsPage() {
       };
 
       if (editingJob) {
+        // Update the existing job first.
         await updateJob(editingJob.id, jobData);
-        alert("Job updated successfully.");
+
+        // Use the customer's existing permanent private portal link.
+        // If the client does not have one yet, create it once and reuse it.
+        try {
+          const clients = await getClients();
+          const client = clients.find(
+            (c: Client) =>
+              String(c.id) === String(jobData.clientId)
+          );
+
+          let portalToken = client?.portalToken;
+
+          if (!portalToken && client) {
+            portalToken = generatePortalToken();
+
+            await updateClient(String(client.id), {
+              portalToken,
+              portalEnabled: true,
+            });
+          }
+
+          const baseUrl =
+            typeof window !== "undefined"
+              ? window.location.origin
+              : "";
+
+          const customerPortalLink = portalToken
+            ? `${baseUrl}/customer/${encodeURIComponent(portalToken)}`
+            : "";
+
+          // Open WhatsApp with the status/payment update pre-filled.
+          // This uses the same working wa.me approach as the Clients page.
+          if (jobData.phone) {
+            const normalizedPhone = jobData.phone
+              .replace(/\D/g, "")
+              .replace(/^0/, "233");
+
+            const message =
+              `Hello ${jobData.clientName || "Customer"}, this is Costa Kudus Tech.\n\n` +
+              `There has been an update to your job.\n\n` +
+              `Job ID: ${editingJob.jobNumber || editingJob.jobId || editingJob.id}\n` +
+              `Service: ${jobData.service}\n` +
+              `Current Job Status: ${jobData.jobStatus}\n` +
+              `Payment Status: ${jobData.paymentStatus}\n\n` +
+              `Open your private customer portal here:\n${customerPortalLink}\n\n` +
+              `You can use your portal to track your Work Progress, view your Payment Summary, make online payments, access your Invoice and Receipts, Order a New Job, and Contact Costa Kudus Tech.\n\n` +
+              `Please keep this link private. Thank you for choosing Costa Kudus Tech.`;
+
+            const whatsappUrl =
+              `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+
+            window.open(
+              whatsappUrl,
+              "_blank",
+              "noopener,noreferrer"
+            );
+
+            alert(
+              "Job updated successfully. WhatsApp has been opened with the update message ready to send."
+            );
+          } else {
+            alert("Job updated successfully.");
+          }
+        } catch (notificationError) {
+          console.error(
+            "Job update notification error:",
+            notificationError
+          );
+          // The job update itself succeeded, so don't report the save as failed.
+          alert(
+            "Job updated successfully, but WhatsApp could not be opened."
+          );
+        }
       } else {
         // Create a short, customer-friendly Job ID.
         const existingJobs = (await getJobs()) as Job[];
 
         const numbers = existingJobs
           .map((job: any) => {
-            const value = String(job.jobNumber || job.jobId || "");
+            const value = String(
+              job.jobNumber || job.jobId || ""
+            );
             const match = value.match(/^JOB-(\d+)$/);
             return match ? Number(match[1]) : 0;
           })
@@ -238,67 +340,79 @@ export default function JobsPage() {
 
         const jobNumber = `JOB-${String(nextNumber).padStart(4, "0")}`;
 
+        // Store the simple Job ID with the job.
         await addJob({
           ...jobData,
           jobNumber,
-        } as any);
+        });
 
-        // Use the customer's existing private portal token.
-        // If one does not exist yet, create it automatically.
-        const selectedClient = clients.find(
-          (client) => String(client.id) === String(jobData.clientId)
+        // Build the customer's permanent private portal link.
+        const baseUrl =
+          typeof window !== "undefined"
+            ? window.location.origin
+            : "";
+
+        const clients = await getClients();
+
+        const client = clients.find(
+          (c: Client) =>
+            String(c.id) === String(jobData.clientId)
         );
 
-        let portalToken = selectedClient?.portalToken;
+        let portalToken = client?.portalToken;
 
-        if (!portalToken && selectedClient?.id) {
+        // Create a portal token only when the client does not already have one.
+        // This keeps the same private customer link for future jobs.
+        if (!portalToken && client) {
           portalToken = generatePortalToken();
 
-          await updateClient(String(selectedClient.id), {
+          await updateClient(String(client.id), {
             portalToken,
             portalEnabled: true,
           });
         }
 
-        // Send the customer to the PRIVATE CUSTOMER PORTAL,
-        // not to the public job-tracking page.
-        if (jobData.phone && portalToken) {
+        const customerPortalLink = portalToken
+          ? `${baseUrl}/customer/${encodeURIComponent(portalToken)}`
+          : "";
+
+        // Notify the client through the working WhatsApp API.
+        if (jobData.phone) {
           try {
             const normalizedPhone = jobData.phone
               .replace(/\D/g, "")
               .replace(/^0/, "233");
 
-            const portalLink =
-              `${window.location.origin}/customer/${portalToken}`;
+            const whatsappResponse = await fetch(
+              "/api/whatsapp",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  phone: normalizedPhone,
+                  message:
+                    `Hello ${jobData.clientName || "Customer"}, this is Costa Kudus Tech.\n\n` +
+                    `Your job has been created successfully.\n\n` +
+                    `Job ID: ${jobNumber}\n` +
+                    `Service: ${jobData.service}\n` +
+                    `Amount: GH₵ ${jobData.amount.toFixed(2)}\n` +
+                    `Status: ${jobData.jobStatus}\n\n` +
+                    `Access your customer portal:\n${customerPortalLink}\n\n` +
+                    `Please keep your Job ID for future reference. Thank you for choosing Costa Kudus Tech.`,
+                }),
+              }
+            );
 
-            const whatsappResponse = await fetch("/api/whatsapp", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                phone: normalizedPhone,
-                message:
-                  `Hello ${jobData.clientName || "Customer"}, this is Costa Kudus Tech.\n\n` +
-                  `Your job has been created successfully.\n\n` +
-                  `Job ID: ${jobNumber}\n` +
-                  `Service: ${jobData.service}\n` +
-                  `Amount: GH₵ ${jobData.amount.toFixed(2)}\n` +
-                  `Status: ${jobData.jobStatus}\n\n` +
-                  `Open your private customer portal here:\n${portalLink}\n\n` +
-                  `From your portal you can track your job, make online payments, view invoices and receipts, and order a new service.\n\n` +
-                  `Please keep your Job ID for future reference. Thank you for choosing Costa Kudus Tech.`,
-              }),
-            });
-
-            const whatsappData = await whatsappResponse.json();
+            const whatsappData =
+              await whatsappResponse.json();
 
             if (!whatsappResponse.ok || !whatsappData.success) {
               console.error(
                 "WhatsApp notification failed:",
                 whatsappData
               );
-
               alert(
                 `Job created successfully, but the WhatsApp notification could not be sent.\n\nJob ID: ${jobNumber}`
               );
@@ -312,14 +426,13 @@ export default function JobsPage() {
               "WhatsApp notification error:",
               whatsappError
             );
-
             alert(
               `Job created successfully, but the WhatsApp notification could not be sent.\n\nJob ID: ${jobNumber}`
             );
           }
         } else {
           alert(
-            `Job created successfully.\n\nJob ID: ${jobNumber}\n\nA private customer portal link could not be created.`
+            `Job created successfully.\n\nJob ID: ${jobNumber}\n\nNo phone number was available for the WhatsApp notification.`
           );
         }
       }
@@ -327,6 +440,8 @@ export default function JobsPage() {
       setOpenForm(false);
       setEditingJob(null);
       setForm(emptyForm);
+      setServiceSearch("");
+      setServiceDropdownOpen(false);
 
       await loadData();
     } catch (error) {
@@ -419,6 +534,10 @@ export default function JobsPage() {
     }
   };
 
+  const filteredServices = SERVICES.filter((service) =>
+    service.toLowerCase().includes(serviceSearch.toLowerCase())
+  );
+
   const filteredJobs = jobs.filter((job) => {
     const searchText = search.toLowerCase();
 
@@ -437,6 +556,9 @@ export default function JobsPage() {
         .includes(searchText) ||
       job.source
         ?.toLowerCase()
+        .includes(searchText) ||
+      String(job.jobNumber || job.jobId || job.id || "")
+        .toLowerCase()
         .includes(searchText) ||
       job.requestStatus
         ?.toLowerCase()
@@ -660,6 +782,10 @@ export default function JobsPage() {
               <tr className="text-left">
 
                 <th className="p-4">
+                  Job ID
+                </th>
+
+                <th>
                   Client
                 </th>
 
@@ -702,7 +828,7 @@ export default function JobsPage() {
                 <tr>
 
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="p-10 text-center text-slate-500"
                   >
                     No jobs found.
@@ -718,6 +844,14 @@ export default function JobsPage() {
                     key={job.id}
                     className="border-t transition hover:bg-slate-50"
                   >
+
+                    {/* JOB ID */}
+
+                    <td className="p-4">
+                      <p className="font-semibold text-blue-700">
+                        {job.jobNumber || job.jobId || job.id}
+                      </p>
+                    </td>
 
                     {/* CLIENT */}
 
@@ -923,6 +1057,8 @@ export default function JobsPage() {
                 onClick={() => {
                   setOpenForm(false);
                   setEditingJob(null);
+                  setServiceSearch("");
+                  setServiceDropdownOpen(false);
                 }}
                 className="rounded-lg p-2 hover:bg-slate-100"
               >
@@ -984,24 +1120,56 @@ export default function JobsPage() {
 
               </div>
 
-              <div>
-
+              <div className="relative">
                 <label className="mb-2 block text-sm font-medium text-slate-700">
                   Service *
                 </label>
 
                 <input
-                  value={form.service}
-                  onChange={(e) =>
-                    handleChange(
-                      "service",
-                      e.target.value
-                    )
-                  }
-                  placeholder="e.g. Printing"
+                  value={serviceSearch || form.service}
+                  onFocus={() => {
+                    setServiceDropdownOpen(true);
+                    setServiceSearch(form.service);
+                  }}
+                  onChange={(e) => {
+                    setServiceSearch(e.target.value);
+                    setServiceDropdownOpen(true);
+                    handleChange("service", e.target.value);
+                  }}
+                  placeholder="Search or select a service..."
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+                  autoComplete="off"
                 />
 
+                {serviceDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+                    {filteredServices.length > 0 ? (
+                      filteredServices.map((service) => (
+                        <button
+                          key={service}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            handleChange("service", service);
+                            setServiceSearch(service);
+                            setServiceDropdownOpen(false);
+                          }}
+                          className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm transition hover:bg-blue-50 hover:text-blue-700 ${
+                            form.service === service
+                              ? "bg-blue-50 font-semibold text-blue-700"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          {service}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-3 text-sm text-slate-500">
+                        No matching service found.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1129,6 +1297,8 @@ export default function JobsPage() {
                 onClick={() => {
                   setOpenForm(false);
                   setEditingJob(null);
+                  setServiceSearch("");
+                  setServiceDropdownOpen(false);
                 }}
                 className="rounded-xl border border-slate-300 px-5 py-3 font-medium hover:bg-slate-50"
               >
@@ -1199,6 +1369,18 @@ export default function JobsPage() {
             </div>
 
             <div className="grid gap-5 p-6 md:grid-cols-2">
+
+              <div>
+                <p className="text-sm text-slate-500">
+                  Job ID
+                </p>
+
+                <p className="font-semibold text-blue-700">
+                  {viewingJob.jobNumber ||
+                    viewingJob.jobId ||
+                    viewingJob.id}
+                </p>
+              </div>
 
               <div>
                 <p className="text-sm text-slate-500">

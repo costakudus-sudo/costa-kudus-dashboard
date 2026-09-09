@@ -25,11 +25,29 @@ import { getClients } from "../../../lib/clientService";
 import { getJobs, addJob } from "../../../lib/jobService";
 import { Client } from "../../../lib/types";
 
+interface PortalJob {
+  id: string;
+  clientId?: string;
+  jobNumber?: string;
+  service?: string;
+  serviceDetails?: string;
+  amount?: number;
+  total?: number;
+  amountPaid?: number;
+  balance?: number;
+  discount?: number;
+  jobStatus?: string;
+  paymentStatus?: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
 export default function CustomerPortalPage() {
   const params = useParams();
   const token = params.token as string;
 
   const [client, setClient] = useState<Client | null>(null);
+  const [jobs, setJobs] = useState<PortalJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -40,9 +58,17 @@ export default function CustomerPortalPage() {
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
   useEffect(() => {
-    const loadCustomer = async () => {
+    let active = true;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const loadCustomer = async (initial = false) => {
       try {
-        const clients = await getClients();
+        const [clients, allJobs] = await Promise.all([
+          getClients(),
+          getJobs(),
+        ]);
+
+        if (!active) return;
 
         const foundClient = clients.find(
           (item) =>
@@ -57,20 +83,48 @@ export default function CustomerPortalPage() {
           return;
         }
 
+        const clientJobs = (allJobs as PortalJob[])
+          .filter(
+            (job) =>
+              String(job.clientId || "") === String(foundClient.id)
+          )
+          .sort((a, b) => {
+            const time = (value: any) => {
+              if (!value) return 0;
+              if (typeof value?.toMillis === "function") return value.toMillis();
+              if (value?.seconds) return Number(value.seconds) * 1000;
+              const parsed = new Date(value).getTime();
+              return Number.isNaN(parsed) ? 0 : parsed;
+            };
+            return Math.max(time(b.updatedAt), time(b.createdAt)) -
+              Math.max(time(a.updatedAt), time(a.createdAt));
+          });
+
         setClient(foundClient);
+        setJobs(clientJobs);
       } catch (err) {
         console.error("Customer portal error:", err);
-        setError(
-          "Unable to load your portal. Please try again later."
-        );
+        if (initial && active) {
+          setError(
+            "Unable to load your portal. Please try again later."
+          );
+        }
       } finally {
-        setLoading(false);
+        if (initial && active) setLoading(false);
       }
     };
 
     if (token) {
-      loadCustomer();
+      loadCustomer(true);
+      // Keep the portal synchronized with admin changes without requiring
+      // the customer to manually refresh the page.
+      timer = setInterval(() => loadCustomer(false), 5000);
     }
+
+    return () => {
+      active = false;
+      if (timer) clearInterval(timer);
+    };
   }, [token]);
 
     // Verify Paystack payment after customer returns from checkout
@@ -151,9 +205,9 @@ export default function CustomerPortalPage() {
 
       await addJob({
         clientId: String((client as any).id || ""),
-        clientName: client?.fullName || "Customer",
-        phone: client?.phone || "",
-        email: client?.email || "",
+        clientName: client.fullName || "Customer",
+        phone: client.phone || "",
+        email: client.email || "",
         service: orderService,
         serviceDetails: orderDetails.trim() || "Customer requested this service through the customer portal.",
         amount: 0,
@@ -242,20 +296,29 @@ export default function CustomerPortalPage() {
     );
   }
 
-  const subtotal = Number(client.amount || 0);
-  const discount = Number(client.discount || 0);
+  // The latest job is the live source for work progress and job finances.
+  // Client-level values remain fallbacks for older records.
+  const currentJob = jobs[0] || null;
+
+  const subtotal = Number(currentJob?.amount ?? client.amount ?? 0);
+  const discount = Number(currentJob?.discount ?? client.discount ?? 0);
 
   const total = Number(
-    client.total ?? subtotal - discount
+    currentJob?.total ?? client.total ?? subtotal - discount
   );
 
-  const amountPaid = Number(client.amountPaid || 0);
+  const amountPaid = Number(
+    currentJob?.amountPaid ?? client.amountPaid ?? 0
+  );
 
   const balance = Number(
-    client.balance ?? total - amountPaid
+    currentJob?.balance ?? client.balance ?? total - amountPaid
   );
 
-  const status = client.jobStatus || "Pending";
+  const status = currentJob?.jobStatus || client.jobStatus || "Pending";
+  const paymentStatus =
+    currentJob?.paymentStatus || client.paymentStatus || "Unpaid";
+  const currentService = currentJob?.service || client.service || "Your service";
 
   const statusSteps = [
     "Pending",
@@ -461,16 +524,16 @@ export default function CustomerPortalPage() {
                 <div className="mt-1 flex items-center gap-2">
                   <span
                     className={`h-2.5 w-2.5 rounded-full ${
-                      client.paymentStatus === "Paid"
+                      paymentStatus === "Paid"
                         ? "bg-emerald-400"
-                        : client.paymentStatus === "Part Payment"
+                        : paymentStatus === "Part Payment"
                         ? "bg-orange-400"
                         : "bg-red-400"
                     }`}
                   />
 
                   <span className="text-sm font-bold text-white">
-                    {client.paymentStatus}
+                    {paymentStatus}
                   </span>
                 </div>
               </div>
@@ -498,7 +561,7 @@ export default function CustomerPortalPage() {
             </p>
 
             <p className="mt-1 truncate text-lg font-bold">
-              {client.service}
+              {currentService}
             </p>
           </div>
 
@@ -605,7 +668,7 @@ export default function CustomerPortalPage() {
               </p>
 
               <p className="mt-2 text-lg font-bold text-slate-900">
-                {client.service}
+                {currentService}
               </p>
             </div>
 
@@ -657,6 +720,11 @@ export default function CustomerPortalPage() {
               <p className="text-sm text-slate-500">
                 Follow the progress of your work
               </p>
+              {currentJob?.jobNumber && (
+                <p className="mt-1 text-xs font-semibold text-slate-400">
+                  Job ID: {currentJob.jobNumber}
+                </p>
+              )}
             </div>
           </div>
 
@@ -796,14 +864,14 @@ export default function CustomerPortalPage() {
 
             <div
               className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                client.paymentStatus === "Paid"
+                paymentStatus === "Paid"
                   ? "bg-emerald-100 text-emerald-700"
-                  : client.paymentStatus === "Part Payment"
+                  : paymentStatus === "Part Payment"
                   ? "bg-orange-100 text-orange-700"
                   : "bg-red-100 text-red-700"
               }`}
             >
-              {client.paymentStatus}
+              {paymentStatus}
             </div>
           </div>
 
@@ -979,6 +1047,37 @@ export default function CustomerPortalPage() {
                 View Invoice →
             </span>
             </Link>
+
+            <Link
+            href={`/customer/${token}/receipt`}
+            className="group rounded-2xl bg-white p-6 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-md"
+            >
+            <div className="flex items-center justify-between">
+                <div className="rounded-xl bg-green-100 p-3">
+                <CheckCircle2
+                size={23}
+                className="text-green-600"
+                />
+                </div>
+
+                <ArrowRight
+                size={18}
+                className="text-slate-300 transition group-hover:translate-x-1"
+                />
+            </div>
+
+            <h3 className="mt-5 font-bold text-slate-900">
+                View Receipt
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-500">
+                View your latest payment receipt
+            </p>
+
+            <span className="mt-3 inline-block text-xs font-semibold text-green-600">
+                View Receipt →
+            </span>
+            </Link>
             <Link
               href={`/customer/${token}/receipt`}
               className="group rounded-2xl bg-white p-6 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-md"
@@ -1109,7 +1208,7 @@ export default function CustomerPortalPage() {
 
             <a
             href={`https://wa.me/233540503966?text=${encodeURIComponent(
-                `Hello Costa Kudus Tech, I am ${client.fullName}. I am contacting you regarding my ${client.service} job.\n\nCurrent Job Status: ${status}\nPayment Status: ${client.paymentStatus}\nTotal Amount: GH₵ ${total.toFixed(2)}\nAmount Paid: GH₵ ${amountPaid.toFixed(2)}\nOutstanding Balance: GH₵ ${balance.toFixed(2)}`
+                `Hello Costa Kudus Tech, I am ${client.fullName}. I am contacting you regarding my ${currentService} job.\n\nCurrent Job Status: ${status}\nPayment Status: ${paymentStatus}\nTotal Amount: GH₵ ${total.toFixed(2)}\nAmount Paid: GH₵ ${amountPaid.toFixed(2)}\nOutstanding Balance: GH₵ ${balance.toFixed(2)}`
             )}`}
             target="_blank"
             rel="noopener noreferrer"
