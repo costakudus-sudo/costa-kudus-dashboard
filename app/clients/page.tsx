@@ -67,82 +67,53 @@ export default function ClientsPage() {
    * ADD / UPDATE CLIENT
    */
   const handleSaveClient = async (client: any) => {
-  try {
-    // Make sure the name always comes from either field
-    const fullName = String(
-      client.fullName || client.name || ""
-    ).trim();
-
-    const phone = String(client.phone || "").trim();
-    const service = String(client.service || "").trim();
-    const serviceDetails = String(
-      client.serviceDetails || ""
-    ).trim();
-
-    // Prevent undefined/empty values from reaching Firebase
-    if (!fullName) {
-      alert("Please enter the client's full name.");
-      return;
-    }
-
-    if (!phone) {
-      alert("Please enter the client's phone number.");
-      return;
-    }
-
-    if (!service) {
-      alert("Please enter the service.");
-      return;
-    }
-
-    if (editingClient) {
-      // UPDATE EXISTING CLIENT
-      await updateClient(String(client.id), {
-        fullName,
-        phone,
-        service,
-        serviceDetails,
-        amount: client.amount ?? 0,
-        jobStatus: client.jobStatus || "Pending",
-        paymentStatus: client.paymentStatus || "Unpaid",
+    try {
+      if (editingClient) {
+        // UPDATE EXISTING CLIENT
+        await updateClient(String(client.id), {
+        fullName: client.fullName,
+        phone: client.phone,
+        service: client.service,
+        serviceDetails: client.serviceDetails,
+        amount: client.amount,
+        jobStatus: client.jobStatus,
+        paymentStatus: client.paymentStatus,
       });
 
-      alert("Client updated successfully.");
-    } else {
-      // ADD NEW CLIENT
-      await addClient({
-        fullName,
-        phone,
-        service,
-        serviceDetails,
-        amount: client.amount ?? 0,
-        jobStatus: client.jobStatus || "Pending",
-        paymentStatus: client.paymentStatus || "Unpaid",
-      });
+        alert("Client updated successfully.");
+      } else {
+        // ADD NEW CLIENT
+        await addClient({
+          fullName: client.fullName,
+          phone: client.phone,
+          service: client.service,
+          serviceDetails: client.serviceDetails,
+          amount: client.amount,
+          jobStatus: client.jobStatus,
+          paymentStatus: client.paymentStatus,
+        });
 
-      alert("Client added successfully.");
-    }
+        alert("Client added successfully.");
+      }
 
-    // Reload clients from Firebase
-    const updatedClients = await getClients();
+      // Reload clients from Firebase
+      const updatedClients = await getClients();
 
-    const normalizedClients = updatedClients.map(
-      (item: any) => ({
+      const normalizedClients = updatedClients.map((item: any) => ({
         ...item,
         name: item.name || item.fullName || "",
-      })
-    );
+      }));
 
-    setClients(normalizedClients);
+      setClients(normalizedClients);
 
-    // Close form
-    setOpenForm(false);
-    setEditingClient(null);
-  } catch (error) {
-    console.error("Error saving client:", error);
-    alert("Failed to save client.");
-  }
-};
+      // Close form
+      setOpenForm(false);
+      setEditingClient(null);
+    } catch (error) {
+      console.error("Error saving client:", error);
+      alert("Failed to save client.");
+    }
+  };
 
   /*
  * GENERATE CUSTOMER PORTAL LINK
@@ -186,6 +157,51 @@ const handleGeneratePortalLink = async (client: Client) => {
   }
 };
 
+
+  /*
+   * OPEN WHATSAPP MODAL WITH THE CUSTOMER'S PRIVATE PORTAL LINK
+   */
+  const handleOpenWhatsapp = async (client: Client) => {
+    try {
+      let portalToken = client.portalToken;
+
+      // Make sure every WhatsApp message contains a valid private portal link.
+      if (!portalToken) {
+        portalToken = generatePortalToken();
+      }
+
+      if (!client.portalToken || client.portalEnabled !== true) {
+        await updateClient(String(client.id), {
+          portalToken,
+          portalEnabled: true,
+        });
+
+        setClients((prev) =>
+          prev.map((item) =>
+            String(item.id) === String(client.id)
+              ? { ...item, portalToken, portalEnabled: true }
+              : item
+          )
+        );
+      }
+
+      const portalLink = `${window.location.origin}/customer/${encodeURIComponent(
+        portalToken
+      )}`;
+
+      setWhatsappClient({ ...client, portalToken, portalEnabled: true });
+      setWhatsappMessage(
+        `Hello ${client.fullName || "there"}, this is Costa Kudus Tech.\n\n` +
+        `Your private customer portal is ready.\n\n` +
+        `Open your customer portal here:\n${portalLink}\n\n` +
+        `From your portal you can track your Work Progress, view your Payment Summary, access Invoices and Receipts, Order a New Job, and Contact Costa Kudus Tech.\n\n` +
+        `Please keep this link private. Thank you for choosing Costa Kudus Tech.`
+      );
+    } catch (error) {
+      console.error("Error preparing WhatsApp portal link:", error);
+      alert("Unable to prepare the customer's private portal link.");
+    }
+  };
 
   /*
    * SEND WHATSAPP MESSAGE
@@ -521,16 +537,11 @@ const handleGeneratePortalLink = async (client: Client) => {
                         >
                           <Link size={18} />
                         </button>
-                           {/* WHATSAPP */}
+                           {/* WHATSAPP + PRIVATE CUSTOMER PORTAL */}
                            <button
-                             onClick={() => {
-                               setWhatsappClient(client);
-                               setWhatsappMessage(
-                                 `Hello ${client.fullName || "there"}, this is Costa Kudus Tech.`
-                               );
-                             }}
+                             onClick={() => handleOpenWhatsapp(client)}
                              className="text-green-600 hover:text-green-800"
-                             title="Send WhatsApp Message"
+                             title="Send WhatsApp Message with Customer Portal"
                            >
                              <MessageCircle size={18} />
                            </button>
