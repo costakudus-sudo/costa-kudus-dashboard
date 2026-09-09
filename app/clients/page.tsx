@@ -21,7 +21,6 @@ import {
   Users,
   UserCheck,
   Briefcase,
-  Phone,
   X,
   Link,
   MessageCircle,
@@ -33,10 +32,6 @@ export default function ClientsPage() {
 
   const [editingClient, setEditingClient] = useState<any>(null);
   const [viewingClient, setViewingClient] = useState<any>(null);
-  const [whatsappClient, setWhatsappClient] = useState<any>(null);
-  const [whatsappMessage, setWhatsappMessage] = useState("");
-  const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
-
   const [clients, setClients] = useState<Client[]>([]);
 
   /*
@@ -159,18 +154,33 @@ const handleGeneratePortalLink = async (client: Client) => {
 
 
   /*
-   * OPEN WHATSAPP MODAL WITH THE CUSTOMER'S PRIVATE PORTAL LINK
+   * OPEN WHATSAPP WITH THE CUSTOMER'S COMPLETE PRIVATE PORTAL LINK
+   *
+   * This deliberately uses WhatsApp's wa.me link instead of /api/whatsapp.
+   * That means the green WhatsApp button does not depend on the server-side
+   * WhatsApp API and will not show "Failed to send WhatsApp message" merely
+   * because that API is unavailable.
    */
   const handleOpenWhatsapp = async (client: Client) => {
     try {
+      if (!client.id) {
+        alert("This client does not have a valid client ID.");
+        return;
+      }
+
       let portalToken = client.portalToken;
 
-      // Make sure every WhatsApp message contains a valid private portal link.
+      // Reuse the customer's existing private token.
+      // Create one only if the customer does not have one yet.
       if (!portalToken) {
         portalToken = generatePortalToken();
       }
 
-      if (!client.portalToken || client.portalEnabled !== true) {
+      // Make sure the customer's portal is enabled and the token is saved.
+      if (
+        !client.portalToken ||
+        client.portalEnabled !== true
+      ) {
         await updateClient(String(client.id), {
           portalToken,
           portalEnabled: true,
@@ -179,76 +189,60 @@ const handleGeneratePortalLink = async (client: Client) => {
         setClients((prev) =>
           prev.map((item) =>
             String(item.id) === String(client.id)
-              ? { ...item, portalToken, portalEnabled: true }
+              ? {
+                  ...item,
+                  portalToken,
+                  portalEnabled: true,
+                }
               : item
           )
         );
       }
 
-      const portalLink = `${window.location.origin}/customer/${encodeURIComponent(
-        portalToken
-      )}`;
+      // Build the exact same private portal URL used by the purple
+      // "Generate Customer Portal Link" button.
+      const portalLink =
+        `${window.location.origin}/customer/${encodeURIComponent(
+          portalToken
+        )}`;
 
-      setWhatsappClient({ ...client, portalToken, portalEnabled: true });
-      setWhatsappMessage(
-        `Hello ${client.fullName || "there"}, this is Costa Kudus Tech.\n\n` +
-        `Your private customer portal is ready.\n\n` +
-        `Open your customer portal here:\n${portalLink}\n\n` +
-        `From your portal you can track your Work Progress, view your Payment Summary, access Invoices and Receipts, Order a New Job, and Contact Costa Kudus Tech.\n\n` +
-        `Please keep this link private. Thank you for choosing Costa Kudus Tech.`
-      );
-    } catch (error) {
-      console.error("Error preparing WhatsApp portal link:", error);
-      alert("Unable to prepare the customer's private portal link.");
-    }
-  };
+      // Normalize Ghana phone numbers for WhatsApp.
+      const rawPhone = String(client.phone || "").trim();
+      let phone = rawPhone.replace(/\D/g, "");
 
-  /*
-   * SEND WHATSAPP MESSAGE
-   */
-  const handleSendWhatsapp = async () => {
-    if (!whatsappClient) return;
+      if (phone.startsWith("0")) {
+        phone = "233" + phone.substring(1);
+      } else if (phone.length === 9) {
+        phone = "233" + phone;
+      }
 
-    const phone = String(whatsappClient.phone || "").replace(/\D/g, "");
-    const message = whatsappMessage.trim();
-
-    if (!phone) {
-      alert("This client does not have a phone number.");
-      return;
-    }
-
-    if (!message) {
-      alert("Please enter a message.");
-      return;
-    }
-
-    try {
-      setSendingWhatsapp(true);
-
-      const response = await fetch("/api/whatsapp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ phone, message }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        console.error("WhatsApp send error:", data);
-        alert("Failed to send WhatsApp message.");
+      if (!phone) {
+        alert("This client does not have a phone number.");
         return;
       }
 
-      alert("WhatsApp message sent successfully.");
-      setWhatsappClient(null);
-      setWhatsappMessage("");
+      const message =
+        `Hello ${client.fullName || "there"}, this is Costa Kudus Tech.\n\n` +
+        `Your private customer portal is ready.\n\n` +
+        `Open your customer portal here:\n${portalLink}\n\n` +
+        `From your portal you can track your Work Progress, view your Payment Summary, make online payments, access your Invoice and Receipts, Order a New Job, and Contact Costa Kudus Tech.\n\n` +
+        `Please keep this link private. Thank you for choosing Costa Kudus Tech.`;
+
+      // Open WhatsApp directly with the complete message pre-filled.
+      // The customer chat opens on WhatsApp Web/Desktop or the WhatsApp app.
+      const whatsappUrl =
+        `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
-      console.error("WhatsApp error:", error);
-      alert("Failed to send WhatsApp message.");
-    } finally {
-      setSendingWhatsapp(false);
+      console.error(
+        "Error opening WhatsApp with customer portal:",
+        error
+      );
+
+      alert(
+        "Unable to open WhatsApp. Please check the customer's phone number."
+      );
     }
   };
 
@@ -541,7 +535,7 @@ const handleGeneratePortalLink = async (client: Client) => {
                            <button
                              onClick={() => handleOpenWhatsapp(client)}
                              className="text-green-600 hover:text-green-800"
-                             title="Send WhatsApp Message with Customer Portal"
+                             title="Open WhatsApp with Private Customer Portal"
                            >
                              <MessageCircle size={18} />
                            </button>
@@ -602,73 +596,6 @@ const handleGeneratePortalLink = async (client: Client) => {
 
       </div>
 
-
-      {/* ================= WHATSAPP MODAL ================= */}
-      {whatsappClient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b p-6">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-800">
-                  Send WhatsApp Message
-                </h2>
-                <p className="text-sm text-slate-500">
-                  {whatsappClient.fullName || "Client"} • {whatsappClient.phone || "-"}
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  setWhatsappClient(null);
-                  setWhatsappMessage("");
-                }}
-                className="rounded-lg p-2 hover:bg-slate-100"
-                disabled={sendingWhatsapp}
-              >
-                <X size={22} />
-              </button>
-            </div>
-
-            <div className="space-y-4 p-6">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Message
-                </label>
-                <textarea
-                  value={whatsappMessage}
-                  onChange={(e) => setWhatsappMessage(e.target.value)}
-                  rows={6}
-                  placeholder="Type your WhatsApp message..."
-                  className="w-full resize-none rounded-xl border border-gray-200 p-3 outline-none focus:ring-2 focus:ring-green-500"
-                  disabled={sendingWhatsapp}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => {
-                  setWhatsappClient(null);
-                  setWhatsappMessage("");
-                }}
-                className="rounded-xl border border-gray-200 px-5 py-3 font-medium text-slate-700 hover:bg-slate-50"
-                disabled={sendingWhatsapp}
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={handleSendWhatsapp}
-                className="flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={sendingWhatsapp}
-              >
-                <MessageCircle size={18} />
-                {sendingWhatsapp ? "Sending..." : "Send WhatsApp"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ================= CLIENT FORM ================= */}
 
